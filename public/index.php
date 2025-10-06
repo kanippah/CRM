@@ -2135,35 +2135,43 @@ if (isset($_GET['favicon'])) {
       alert('Update added successfully');
     }
     
-jects.list');
+    function switchProjectView(mode) {
+      projectViewMode = mode;
+      renderProjects();
+    }
+    
+    async function renderProjects() {
+      if (CONTACTS.length === 0) {
+        CONTACTS = (await api('contacts.list')).items;
+      }
+      const data = await api('projects.list');
       const projects = data.items;
       
       const kanbanHTML = STAGES.map(stage => {
         const stageProjects = projects.filter(p => p.stage === stage);
         return `
           <div class="kanban-col" data-stage="${stage}" ondrop="dropProject(event)" ondragover="allowDrop(event)">
-            <h4>${stage}</h4>
+            <h4>${stage} (${stageProjects.length})</h4>
             ${stageProjects.map(p => `
               <div class="kanban-card" draggable="true" ondragstart="dragProject(event, ${p.id})" data-id="${p.id}">
-                <strong>${p.name}</strong>
-                <div>${p.contact_name || p.contact_company || 'No contact'}</div>
-                <div style="color: var(--accent);">$${p.value || 0}</div>
+                <div class="kanban-actions" onclick="event.stopPropagation()">
+                  <button onclick="event.stopPropagation(); addProjectNote(${p.id})">+ Note</button>
+                  <button onclick="event.stopPropagation(); openProjectForm(${p.id})">Edit</button>
+                  <button class="danger" onclick="event.stopPropagation(); deleteProject(${p.id})">Del</button>
+                </div>
+                <span class="kanban-card-title" onclick="event.stopPropagation(); viewProjectDetail(${p.id})">${p.name}</span>
+                <div class="kanban-card-contact" onclick="event.stopPropagation(); viewContactDetail(${p.contact_id})">${p.contact_name || p.contact_company || 'No contact'}</div>
+                <div class="kanban-card-value">$${parseFloat(p.value || 0).toLocaleString()}</div>
+                ${p.next_date ? `<div class="kanban-card-date">📅 ${new Date(p.next_date).toLocaleDateString()}</div>` : ''}
+                ${p.notes ? `<div class="kanban-card-notes">💬 ${p.notes.split('\\n')[p.notes.split('\\n').length - 1]}</div>` : ''}
               </div>
             `).join('')}
           </div>
         `;
       }).join('');
       
-      document.getElementById('view-projects').innerHTML = `
-        <div class="toolbar">
-          <button class="btn" onclick="openProjectForm()">+ New Project</button>
-          <div style="font-size: 12px; color: var(--muted);">Drag cards between stages</div>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
-          ${kanbanHTML}
-        </div>
+      const tableHTML = `
         <div class="card">
-          <h3>All Projects</h3>
           <table id="projectsTable">
             <thead>
               <tr><th>Name</th><th>Contact</th><th>Value</th><th>Stage</th><th>Next Date</th><th>Actions</th></tr>
@@ -2171,12 +2179,14 @@ jects.list');
             <tbody>
               ${projects.map(p => `
                 <tr>
-                  <td><strong>${p.name}</strong></td>
-                  <td>${p.contact_name || p.contact_company || '-'}</td>
-                  <td>$${p.value || 0}</td>
+                  <td><strong style="cursor: pointer; text-decoration: underline; color: var(--brand);" onclick="viewProjectDetail(${p.id})">${p.name}</strong></td>
+                  <td style="cursor: pointer; text-decoration: underline;" onclick="viewContactDetail(${p.contact_id})">${p.contact_name || p.contact_company || '-'}</td>
+                  <td>$${parseFloat(p.value || 0).toLocaleString()}</td>
                   <td><span class="badge">${p.stage}</span></td>
                   <td>${p.next_date ? new Date(p.next_date).toLocaleDateString() : '-'}</td>
                   <td>
+                    <button class="btn" onclick="viewProjectDetail(${p.id})">View</button>
+                    <button class="btn" onclick="addProjectNote(${p.id})">+ Note</button>
                     <button class="btn" onclick="openProjectForm(${p.id})">Edit</button>
                     <button class="btn danger" onclick="deleteProject(${p.id})">Delete</button>
                   </td>
@@ -2186,6 +2196,136 @@ jects.list');
           </table>
         </div>
       `;
+      
+      document.getElementById('view-projects').innerHTML = `
+        <div class="toolbar">
+          <button class="btn" onclick="openProjectForm()">+ New Project</button>
+          <div class="view-toggle">
+            <button class="${projectViewMode === 'kanban' ? 'active' : ''}" onclick="switchProjectView('kanban')">📊 Kanban</button>
+            <button class="${projectViewMode === 'table' ? 'active' : ''}" onclick="switchProjectView('table')">📋 Table</button>
+          </div>
+          <div style="flex: 1"></div>
+          <div style="font-size: 12px; color: var(--muted);">${projectViewMode === 'kanban' ? 'Drag cards between stages' : projects.length + ' total projects'}</div>
+        </div>
+        ${projectViewMode === 'kanban' ? `
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+            ${kanbanHTML}
+          </div>
+        ` : tableHTML}
+      `;
+    }
+    
+    function viewContactDetail(contactId) {
+      if (!contactId) return;
+      const contact = CONTACTS.find(c => c.id === contactId);
+      if (!contact) return;
+      
+      showModal(`
+        <h3>Contact Details</h3>
+        <div style="padding: 12px; background: var(--bg); border-radius: 6px; margin-bottom: 16px;">
+          <div style="margin-bottom: 8px;"><strong>Type:</strong> ${contact.type || '-'}</div>
+          <div style="margin-bottom: 8px;"><strong>Name:</strong> ${contact.name || '-'}</div>
+          <div style="margin-bottom: 8px;"><strong>Company:</strong> ${contact.company || '-'}</div>
+          <div style="margin-bottom: 8px;"><strong>Email:</strong> ${contact.email || '-'}</div>
+          <div style="margin-bottom: 8px;"><strong>Phone:</strong> ${contact.phone_country || ''} ${contact.phone_number || '-'}</div>
+          <div style="margin-bottom: 8px;"><strong>Source:</strong> ${contact.source || '-'}</div>
+          ${contact.notes ? `<div style="margin-top: 12px;"><strong>Notes:</strong><br>${contact.notes.replace(/\n/g, '<br>')}</div>` : ''}
+        </div>
+        <button class="btn" onclick="closeModal(); openContactForm(${contactId})">Edit Contact</button>
+        <button class="btn secondary" onclick="closeModal()">Close</button>
+      `);
+    }
+    
+    async function viewProjectDetail(projectId) {
+      const data = await api('projects.list');
+      const project = data.items.find(p => p.id === projectId);
+      if (!project) return;
+      
+      showModal(`
+        <h3>Project: ${project.name}</h3>
+        <div style="padding: 16px; background: var(--bg); border-radius: 6px; margin-bottom: 16px;">
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--brand);">Contact</strong><br>
+            <span style="cursor: pointer; text-decoration: underline;" onclick="closeModal(); viewContactDetail(${project.contact_id})">${project.contact_name || project.contact_company || '-'}</span>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--brand);">Value</strong><br>
+            $${parseFloat(project.value || 0).toLocaleString()}
+          </div>
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--brand);">Stage</strong><br>
+            <span class="badge">${project.stage}</span>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <strong style="color: var(--brand);">Next Date</strong><br>
+            ${project.next_date ? new Date(project.next_date).toLocaleDateString() : 'Not set'}
+          </div>
+          ${project.notes ? `
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <strong style="color: var(--brand);">Notes History</strong>
+            <div style="margin-top: 8px; max-height: 300px; overflow-y: auto;">
+              ${project.notes.split('\\n---\\n').map((note, idx) => `
+                <div style="padding: 8px; background: var(--panel); border-left: 3px solid var(--accent); margin-bottom: 8px; border-radius: 4px;">
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">${idx === 0 ? 'Initial' : 'Update ' + idx}</div>
+                  <div style="white-space: pre-wrap;">${note}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          ` : '<div style="color: var(--muted); font-style: italic;">No notes yet</div>'}
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <div style="font-size: 12px; color: var(--muted);">Created: ${new Date(project.created_at).toLocaleString()}</div>
+            <div style="font-size: 12px; color: var(--muted);">Last Updated: ${new Date(project.updated_at).toLocaleString()}</div>
+          </div>
+        </div>
+        <button class="btn" onclick="closeModal(); addProjectNote(${projectId})">+ Add Note</button>
+        <button class="btn" onclick="closeModal(); openProjectForm(${projectId})">Edit Project</button>
+        <button class="btn secondary" onclick="closeModal()">Close</button>
+      `);
+    }
+    
+    function addProjectNote(projectId) {
+      showModal(`
+        <h3>Add Note to Project</h3>
+        <form onsubmit="saveProjectNote(event, ${projectId})">
+          <div class="form-group">
+            <label>Note *</label>
+            <textarea name="note" rows="5" required placeholder="Add your note here..."></textarea>
+          </div>
+          <button type="submit" class="btn">Add Note</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveProjectNote(e, projectId) {
+      e.preventDefault();
+      const form = e.target;
+      const note = form.note.value.trim();
+      
+      const data = await api('projects.list');
+      const project = data.items.find(p => p.id === projectId);
+      if (!project) return;
+      
+      const existingNotes = project.notes || '';
+      const newNotes = existingNotes ? `${existingNotes}\\n---\\n${note}` : note;
+      
+      await api('projects.save', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: projectId,
+          contactId: project.contact_id,
+          name: project.name,
+          value: project.value,
+          stage: project.stage,
+          next: project.next_date ? project.next_date.split('T')[0] : '',
+          notes: newNotes
+        })
+      });
+      
+      closeModal();
+      alert('Note added successfully');
+      await renderProjects();
     }
     
     let draggedProjectId = null;
