@@ -303,10 +303,12 @@ function api_users_save() {
   
   $id = $b['id'] ?? null;
   $email = trim($b['email'] ?? '');
-  $username = trim($b['username'] ?? '');
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
+  
+  // Auto-generate username from email (keep for backward compatibility)
+  $username = explode('@', $email)[0];
   
   // Validate email format
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -1909,7 +1911,6 @@ if (isset($_GET['background'])) {
             <thead>
               <tr>
                 <th>Email</th>
-                <th>Username</th>
                 <th>Full Name</th>
                 <th>Role</th>
                 <th>Created</th>
@@ -1931,7 +1932,6 @@ if (isset($_GET['background'])) {
       tbody.innerHTML = data.items.map(user => `
         <tr>
           <td><strong>${user.email || 'N/A'}</strong></td>
-          <td>${user.username}</td>
           <td>${user.full_name}</td>
           <td><span class="badge ${user.role}">${user.role}</span></td>
           <td>${new Date(user.created_at).toLocaleDateString()}</td>
@@ -1961,10 +1961,6 @@ if (isset($_GET['background'])) {
           <div class="form-group">
             <label>Email *</label>
             <input type="email" name="email" value="${user?.email || ''}" placeholder="user@example.com" required>
-          </div>
-          <div class="form-group">
-            <label>Username *</label>
-            <input type="text" name="username" value="${user?.username || ''}" required>
           </div>
           <div class="form-group">
             <label>Full Name *</label>
@@ -2002,7 +1998,6 @@ if (isset($_GET['background'])) {
       const data = {
         id,
         email: email,
-        username: form.username.value,
         full_name: form.full_name.value,
         password: form.password.value,
         role: form.role.value
