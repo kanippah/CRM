@@ -113,10 +113,19 @@ function ensure_schema() {
       value TEXT
     );
     
+    CREATE TABLE IF NOT EXISTS call_updates (
+      id SERIAL PRIMARY KEY,
+      call_id INTEGER REFERENCES calls(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    
     CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (LOWER(BTRIM(COALESCE(company,''))));
     CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_phone_unique ON contacts ((regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,'') ,'\\D','','g'))) WHERE COALESCE(phone_country,'')<>'' AND COALESCE(phone_number,'')<>'';
+    CREATE INDEX IF NOT EXISTS idx_call_updates_call ON call_updates(call_id);
 SQL);
 
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
@@ -159,6 +168,8 @@ if (isset($_GET['api'])) {
       case 'calls.list': api_calls_list(); break;
       case 'calls.save': api_calls_save(); break;
       case 'calls.delete': api_calls_delete(); break;
+      case 'call_updates.list': api_call_updates_list(); break;
+      case 'call_updates.save': api_call_updates_save(); break;
       
       case 'projects.list': api_projects_list(); break;
       case 'projects.save': api_projects_save(); break;
@@ -599,6 +610,28 @@ function api_calls_delete() {
   $id = (int)($_GET['id'] ?? 0);
   $p->prepare("DELETE FROM calls WHERE id=:id")->execute([':id' => $id]);
   respond(['ok' => true]);
+}
+
+function api_call_updates_list() {
+  require_auth();
+  $p = db();
+  $call_id = (int)($_GET['call_id'] ?? 0);
+  $s = $p->prepare("SELECT cu.*, u.full_name as user_name FROM call_updates cu LEFT JOIN users u ON cu.user_id = u.id WHERE cu.call_id=:cid ORDER BY cu.created_at DESC");
+  $s->execute([':cid' => $call_id]);
+  respond(['items' => $s->fetchAll()]);
+}
+
+function api_call_updates_save() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $call_id = (int)($b['call_id'] ?? 0);
+  $notes = trim($b['notes'] ?? '');
+  $user_id = $_SESSION['user_id'];
+  
+  $s = $p->prepare("INSERT INTO call_updates (call_id, user_id, notes) VALUES (:cid, :uid, :n) RETURNING *");
+  $s->execute([':cid' => $call_id, ':uid' => $user_id, ':n' => $notes]);
+  respond(['item' => $s->fetch()]);
 }
 
 function api_projects_list() {
