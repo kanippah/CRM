@@ -826,6 +826,31 @@ if (isset($_GET['favicon'])) {
       border-right: 1px solid var(--border);
       padding: 20px;
       overflow-y: auto;
+      transition: transform 0.3s, width 0.3s;
+    }
+    
+    .sidebar.collapsed {
+      width: 0;
+      padding: 0;
+      transform: translateX(-280px);
+    }
+    
+    .sidebar-toggle {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+      background: var(--brand);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: left 0.3s;
+    }
+    
+    .sidebar-toggle.shifted {
+      left: 300px;
     }
     
     .logo-area {
@@ -1063,6 +1088,30 @@ if (isset($_GET['favicon'])) {
     .view { display: none; }
     .view.active { display: block; }
     
+    .view-toggle {
+      display: flex;
+      gap: 8px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    
+    .view-toggle button {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .view-toggle button.active {
+      background: var(--brand);
+      color: white;
+    }
+    
     .kanban-col {
       background: var(--bg);
       border-radius: 8px;
@@ -1087,6 +1136,7 @@ if (isset($_GET['favicon'])) {
       cursor: move;
       border-left: 3px solid var(--accent);
       transition: all 0.2s;
+      position: relative;
     }
     
     .kanban-card:hover {
@@ -1094,15 +1144,86 @@ if (isset($_GET['favicon'])) {
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
     
-    .kanban-card strong {
+    .kanban-card:hover .kanban-actions {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .kanban-card-title {
       display: block;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    
+    .kanban-card-title:hover {
+      color: var(--accent);
+    }
+    
+    .kanban-card-contact {
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    
+    .kanban-card-contact:hover {
       color: var(--brand);
     }
     
-    .kanban-card div {
+    .kanban-card-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: 8px;
+    }
+    
+    .kanban-card-date {
       font-size: 12px;
+      color: var(--muted);
       margin-top: 4px;
+    }
+    
+    .kanban-card-notes {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      font-style: italic;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .kanban-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    
+    .kanban-actions button {
+      padding: 4px 8px;
+      border: none;
+      background: var(--brand);
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: background 0.2s;
+    }
+    
+    .kanban-actions button:hover {
+      background: var(--brand-hover);
+    }
+    
+    .kanban-actions button.danger {
+      background: #dc3545;
     }
     
     @media (max-width: 768px) {
@@ -1118,6 +1239,8 @@ if (isset($_GET['favicon'])) {
     let currentUser = null;
     let currentView = 'leads';
     let currentLeadTab = 'global';
+    let projectViewMode = 'kanban';
+    let sidebarCollapsed = false;
     
     async function api(endpoint, options = {}) {
       const res = await fetch(`?api=${endpoint}`, {
@@ -1194,10 +1317,27 @@ if (isset($_GET['favicon'])) {
       document.body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
     }
     
+    function toggleSidebar() {
+      sidebarCollapsed = !sidebarCollapsed;
+      const sidebar = document.querySelector('.sidebar');
+      const toggleBtn = document.querySelector('.sidebar-toggle');
+      
+      if (sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggleBtn.classList.remove('shifted');
+        toggleBtn.textContent = '☰';
+      } else {
+        sidebar.classList.remove('collapsed');
+        toggleBtn.classList.add('shifted');
+        toggleBtn.textContent = '✕';
+      }
+    }
+    
     function renderApp() {
       const isAdmin = currentUser.role === 'admin';
       
       document.getElementById('app').innerHTML = `
+        <button class="sidebar-toggle shifted" onclick="toggleSidebar()">✕</button>
         <div class="app">
           <aside class="sidebar">
             <div class="logo-area">
@@ -1995,11 +2135,7 @@ if (isset($_GET['favicon'])) {
       alert('Update added successfully');
     }
     
-    async function renderProjects() {
-      if (CONTACTS.length === 0) {
-        CONTACTS = (await api('contacts.list')).items;
-      }
-      const data = await api('projects.list');
+jects.list');
       const projects = data.items;
       
       const kanbanHTML = STAGES.map(stage => {
