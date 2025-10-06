@@ -1227,6 +1227,7 @@ if (isset($_GET['background'])) {
       border-radius: 8px;
       padding: 12px;
       min-height: 200px;
+      min-width: 0;
     }
     
     .kanban-col h4 {
@@ -1247,6 +1248,9 @@ if (isset($_GET['background'])) {
       border-left: 3px solid var(--accent);
       transition: all 0.2s;
       position: relative;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     
     .kanban-card:hover {
@@ -1266,6 +1270,10 @@ if (isset($_GET['background'])) {
       font-weight: 600;
       cursor: pointer;
       text-decoration: underline;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
     }
     
     .kanban-card-title:hover {
@@ -1273,10 +1281,15 @@ if (isset($_GET['background'])) {
     }
     
     .kanban-card-contact {
+      display: block;
       font-size: 13px;
       color: var(--text);
       cursor: pointer;
       text-decoration: underline;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
     }
     
     .kanban-card-contact:hover {
@@ -1284,33 +1297,34 @@ if (isset($_GET['background'])) {
     }
     
     .kanban-card-value {
+      display: block;
       font-size: 14px;
       font-weight: 600;
       color: var(--accent);
       margin-top: 8px;
-    }
-    
-    .kanban-card-date {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-    
-    .kanban-card-notes {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 6px;
-      font-style: italic;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 100%;
     }
     
-    .kanban-card-title,
-    .kanban-card-contact,
-    .kanban-card-value,
     .kanban-card-date {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    
+    .kanban-card-notes {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      font-style: italic;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2395,7 +2409,7 @@ if (isset($_GET['background'])) {
           <div style="font-size: 12px; color: var(--muted);">${projectViewMode === 'kanban' ? 'Drag cards between stages' : projects.length + ' total projects'}</div>
         </div>
         ${projectViewMode === 'kanban' ? `
-          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+          <div style="display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; overflow-x: auto;">
             ${kanbanHTML}
           </div>
         ` : tableHTML}
