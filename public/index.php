@@ -1028,6 +1028,48 @@ if (isset($_GET['favicon'])) {
     .view { display: none; }
     .view.active { display: block; }
     
+    .kanban-col {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 200px;
+    }
+    
+    .kanban-col h4 {
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--brand);
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+    
+    .kanban-card {
+      background: var(--panel);
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      cursor: move;
+      border-left: 3px solid var(--accent);
+      transition: all 0.2s;
+    }
+    
+    .kanban-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .kanban-card strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--brand);
+    }
+    
+    .kanban-card div {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
     @media (max-width: 768px) {
       .app { flex-direction: column; }
       .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
@@ -1131,32 +1173,49 @@ if (isset($_GET['favicon'])) {
               <div style="font-size: 12px; color: var(--muted); text-transform: uppercase;">${currentUser.role}</div>
             </div>
             <nav class="nav">
-              <button onclick="switchView('leads')" class="active">📊 Leads</button>
-              ${isAdmin ? '<button onclick="switchView(\'users\')">👥 Users</button>' : ''}
+              <button onclick="switchView('dashboard')">📊 Dashboard</button>
+              <button onclick="switchView('contacts')">👥 Contacts</button>
+              <button onclick="switchView('calls')">📞 Calls</button>
+              <button onclick="switchView('projects')">📁 Projects</button>
+              <button onclick="switchView('leads')" class="active">🎯 Leads</button>
+              ${isAdmin ? '<button onclick="switchView(\'users\')">⚙️ Users</button>' : ''}
+              <button onclick="switchView('settings')">🔧 Settings</button>
               <button onclick="handleLogout()" class="secondary">🚪 Logout</button>
               <button onclick="toggleTheme()" class="theme-toggle">🌓 Theme</button>
             </nav>
           </aside>
           <main class="content">
+            <div id="view-dashboard" class="view"></div>
+            <div id="view-contacts" class="view"></div>
+            <div id="view-calls" class="view"></div>
+            <div id="view-projects" class="view"></div>
             <div id="view-leads" class="view active"></div>
             ${isAdmin ? '<div id="view-users" class="view"></div>' : ''}
+            <div id="view-settings" class="view"></div>
           </main>
         </div>
       `;
       
-      switchView('leads');
+      switchView('dashboard');
     }
     
     function switchView(view) {
       currentView = view;
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.nav button').forEach(b => {
-        b.classList.toggle('active', b.textContent.includes(view === 'leads' ? 'Leads' : 'Users'));
+        const text = b.textContent.toLowerCase();
+        if (text.includes(view)) b.classList.add('active');
       });
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + view).classList.add('active');
       
+      if (view === 'dashboard') renderDashboard();
+      if (view === 'contacts') renderContacts();
+      if (view === 'calls') renderCalls();
+      if (view === 'projects') renderProjects();
       if (view === 'leads') renderLeads();
       if (view === 'users') renderUsers();
+      if (view === 'settings') renderSettings();
     }
     
     async function renderLeads() {
@@ -1587,6 +1646,482 @@ if (isset($_GET['favicon'])) {
     function closeModal() {
       const modal = document.querySelector('.modal');
       if (modal) modal.remove();
+    }
+    
+    let COUNTRIES = [];
+    let CONTACTS = [];
+    const STAGES = ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won'];
+    
+    async function loadCountries() {
+      const data = await api('countries');
+      COUNTRIES = data.items;
+    }
+    
+    async function renderDashboard() {
+      const stats = await api('stats');
+      document.getElementById('view-dashboard').innerHTML = `
+        <h2 style="margin-bottom: 20px;">Dashboard</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+          <div class="card"><h3>Contacts</h3><div style="font-size: 24px; color: var(--brand);">${stats.contacts}</div></div>
+          <div class="card"><h3>Calls (7 days)</h3><div style="font-size: 24px; color: var(--accent);">${stats.calls7}</div></div>
+          <div class="card"><h3>Open Projects</h3><div style="font-size: 24px; color: var(--kt-yellow);">${stats.openProjects}</div></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="card">
+            <h3>Recent Contacts</h3>
+            <table>
+              <thead><tr><th>Name</th><th>Company</th><th>Phone</th></tr></thead>
+              <tbody>
+                ${stats.recentContacts.map(c => `<tr><td>${c.name || '(no name)'}</td><td>${c.company || '-'}</td><td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Recent Calls</h3>
+            <table>
+              <thead><tr><th>When</th><th>Contact</th><th>Outcome</th></tr></thead>
+              <tbody>
+                ${stats.recentCalls.map(c => `<tr><td>${new Date(c.when_at).toLocaleDateString()}</td><td>${c.name || c.company || '-'}</td><td><span class="badge">${c.outcome}</span></td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+    
+    async function renderContacts() {
+      await loadCountries();
+      CONTACTS = (await api('contacts.list')).items;
+      document.getElementById('view-contacts').innerHTML = `
+        <div class="toolbar">
+          <button class="btn" onclick="openContactForm()">+ New Contact</button>
+          <input type="text" class="search" id="contactSearch" placeholder="Search contacts..." oninput="loadContacts()">
+        </div>
+        <div class="card">
+          <table id="contactsTable">
+            <thead>
+              <tr><th>Name</th><th>Company</th><th>Type</th><th>Phone</th><th>Email</th><th>Source</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      `;
+      await loadContacts();
+    }
+    
+    async function loadContacts() {
+      const q = document.getElementById('contactSearch')?.value || '';
+      const data = await api(`contacts.list&q=${encodeURIComponent(q)}`);
+      CONTACTS = data.items;
+      const tbody = document.querySelector('#contactsTable tbody');
+      tbody.innerHTML = data.items.map(c => `
+        <tr>
+          <td><strong>${c.name || '(no name)'}</strong></td>
+          <td>${c.company || '-'}</td>
+          <td>${c.type || 'Individual'}</td>
+          <td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td>
+          <td>${c.email || '-'}</td>
+          <td>${c.source || '-'}</td>
+          <td>
+            <button class="btn" onclick="openCallFormForContact(${c.id})">Call</button>
+            <button class="btn" onclick="openProjectFormForContact(${c.id})">Project</button>
+            <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
+            <button class="btn danger" onclick="deleteContact(${c.id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+    
+    function openContactForm(id = null) {
+      const contact = id ? CONTACTS.find(c => c.id === id) : null;
+      showModal(`
+        <h3>${contact ? 'Edit Contact' : 'New Contact'}</h3>
+        <form onsubmit="saveContact(event, ${id})">
+          <div class="form-group">
+            <label>Type</label>
+            <select name="type">
+              <option value="Individual" ${contact?.type === 'Individual' ? 'selected' : ''}>Individual</option>
+              <option value="Company" ${contact?.type === 'Company' ? 'selected' : ''}>Company</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Company</label>
+            <input type="text" name="company" value="${contact?.company || ''}">
+          </div>
+          <div class="form-group">
+            <label>Name *</label>
+            <input type="text" name="name" value="${contact?.name || ''}" required>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" value="${contact?.email || ''}">
+          </div>
+          <div class="form-group">
+            <label>Phone Country</label>
+            <select name="phoneCountry">
+              <option value="">None</option>
+              ${COUNTRIES.map(c => `<option value="${c.code}" ${contact?.phone_country === c.code ? 'selected' : ''}>${c.code} ${c.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" name="phoneNumber" value="${contact?.phone_number || ''}">
+          </div>
+          <div class="form-group">
+            <label>Source</label>
+            <input type="text" name="source" value="${contact?.source || ''}" placeholder="Referral, Website, etc.">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea name="notes" rows="3">${contact?.notes || ''}</textarea>
+          </div>
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveContact(e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        id, type: form.type.value, company: form.company.value,
+        name: form.name.value, email: form.email.value,
+        phoneCountry: form.phoneCountry.value, phoneNumber: form.phoneNumber.value,
+        source: form.source.value, notes: form.notes.value
+      };
+      try {
+        const result = await api('contacts.save', { method: 'POST', body: JSON.stringify(data) });
+        if (result.duplicate_of) {
+          alert(`Warning: This contact might be a duplicate of "${result.duplicate_of}"`);
+        }
+        closeModal();
+        await loadContacts();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function deleteContact(id) {
+      if (!confirm('Delete this contact?')) return;
+      await api(`contacts.delete&id=${id}`, { method: 'DELETE' });
+      await loadContacts();
+    }
+    
+    async function renderCalls() {
+      await loadCountries();
+      if (CONTACTS.length === 0) {
+        CONTACTS = (await api('contacts.list')).items;
+      }
+      document.getElementById('view-calls').innerHTML = `
+        <div class="toolbar">
+          <button class="btn" onclick="openCallForm()">+ Log Call</button>
+          <input type="text" class="search" id="callSearch" placeholder="Search calls..." oninput="loadCalls()">
+        </div>
+        <div class="card">
+          <table id="callsTable">
+            <thead>
+              <tr><th>When</th><th>Contact</th><th>Outcome</th><th>Duration (min)</th><th>Notes</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      `;
+      await loadCalls();
+    }
+    
+    async function loadCalls() {
+      const q = document.getElementById('callSearch')?.value || '';
+      const data = await api(`calls.list&q=${encodeURIComponent(q)}`);
+      const tbody = document.querySelector('#callsTable tbody');
+      tbody.innerHTML = data.items.map(c => `
+        <tr>
+          <td>${new Date(c.when_at).toLocaleString()}</td>
+          <td>${c.contact_name || c.contact_company || 'N/A'}</td>
+          <td><span class="badge">${c.outcome}</span></td>
+          <td>${c.duration_min || 0}</td>
+          <td>${c.notes || '-'}</td>
+          <td>
+            <button class="btn" onclick="openCallForm(${c.id})">Edit</button>
+            <button class="btn danger" onclick="deleteCall(${c.id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+    
+    function openCallFormForContact(contactId) {
+      openCallForm(null, contactId);
+    }
+    
+    function openCallForm(id = null, contactId = null) {
+      api('calls.list').then(async (data) => {
+        const call = id ? data.items.find(c => c.id === id) : null;
+        const when = call ? new Date(call.when_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16);
+        showModal(`
+          <h3>${call ? 'Edit Call' : 'Log Call'}</h3>
+          <form onsubmit="saveCall(event, ${id})">
+            <div class="form-group">
+              <label>Contact *</label>
+              <select name="contactId" required>
+                <option value="">Select Contact</option>
+                ${CONTACTS.map(c => `<option value="${c.id}" ${(call?.contact_id === c.id || contactId === c.id) ? 'selected' : ''}>${c.name || c.company}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>When *</label>
+              <input type="datetime-local" name="when" value="${when}" required>
+            </div>
+            <div class="form-group">
+              <label>Outcome *</label>
+              <select name="outcome" required>
+                <option value="Attempted" ${call?.outcome === 'Attempted' ? 'selected' : ''}>Attempted</option>
+                <option value="Answered" ${call?.outcome === 'Answered' ? 'selected' : ''}>Answered</option>
+                <option value="Voicemail" ${call?.outcome === 'Voicemail' ? 'selected' : ''}>Voicemail</option>
+                <option value="No Answer" ${call?.outcome === 'No Answer' ? 'selected' : ''}>No Answer</option>
+                <option value="Busy" ${call?.outcome === 'Busy' ? 'selected' : ''}>Busy</option>
+                <option value="Wrong Number" ${call?.outcome === 'Wrong Number' ? 'selected' : ''}>Wrong Number</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Duration (minutes)</label>
+              <input type="number" name="durationMin" value="${call?.duration_min || 0}" min="0">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea name="notes" rows="3">${call?.notes || ''}</textarea>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      });
+    }
+    
+    async function saveCall(e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        id, contactId: form.contactId.value, when: form.when.value,
+        outcome: form.outcome.value, durationMin: form.durationMin.value, notes: form.notes.value
+      };
+      await api('calls.save', { method: 'POST', body: JSON.stringify(data) });
+      closeModal();
+      await loadCalls();
+    }
+    
+    async function deleteCall(id) {
+      if (!confirm('Delete this call?')) return;
+      await api(`calls.delete&id=${id}`, { method: 'DELETE' });
+      await loadCalls();
+    }
+    
+    async function renderProjects() {
+      if (CONTACTS.length === 0) {
+        CONTACTS = (await api('contacts.list')).items;
+      }
+      const data = await api('projects.list');
+      const projects = data.items;
+      
+      const kanbanHTML = STAGES.map(stage => {
+        const stageProjects = projects.filter(p => p.stage === stage);
+        return `
+          <div class="kanban-col" data-stage="${stage}" ondrop="dropProject(event)" ondragover="allowDrop(event)">
+            <h4>${stage}</h4>
+            ${stageProjects.map(p => `
+              <div class="kanban-card" draggable="true" ondragstart="dragProject(event, ${p.id})" data-id="${p.id}">
+                <strong>${p.name}</strong>
+                <div>${p.contact_name || p.contact_company || 'No contact'}</div>
+                <div style="color: var(--accent);">$${p.value || 0}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('');
+      
+      document.getElementById('view-projects').innerHTML = `
+        <div class="toolbar">
+          <button class="btn" onclick="openProjectForm()">+ New Project</button>
+          <div style="font-size: 12px; color: var(--muted);">Drag cards between stages</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+          ${kanbanHTML}
+        </div>
+        <div class="card">
+          <h3>All Projects</h3>
+          <table id="projectsTable">
+            <thead>
+              <tr><th>Name</th><th>Contact</th><th>Value</th><th>Stage</th><th>Next Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              ${projects.map(p => `
+                <tr>
+                  <td><strong>${p.name}</strong></td>
+                  <td>${p.contact_name || p.contact_company || '-'}</td>
+                  <td>$${p.value || 0}</td>
+                  <td><span class="badge">${p.stage}</span></td>
+                  <td>${p.next_date ? new Date(p.next_date).toLocaleDateString() : '-'}</td>
+                  <td>
+                    <button class="btn" onclick="openProjectForm(${p.id})">Edit</button>
+                    <button class="btn danger" onclick="deleteProject(${p.id})">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    let draggedProjectId = null;
+    
+    function dragProject(e, id) {
+      draggedProjectId = id;
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function allowDrop(e) {
+      e.preventDefault();
+    }
+    
+    async function dropProject(e) {
+      e.preventDefault();
+      const stage = e.currentTarget.dataset.stage;
+      await api('projects.stage', {
+        method: 'POST',
+        body: JSON.stringify({ id: draggedProjectId, stage })
+      });
+      await renderProjects();
+    }
+    
+    function openProjectFormForContact(contactId) {
+      openProjectForm(null, contactId);
+    }
+    
+    function openProjectForm(id = null, contactId = null) {
+      api('projects.list').then(data => {
+        const project = id ? data.items.find(p => p.id === id) : null;
+        const nextDate = project?.next_date ? project.next_date.split('T')[0] : '';
+        showModal(`
+          <h3>${project ? 'Edit Project' : 'New Project'}</h3>
+          <form onsubmit="saveProject(event, ${id})">
+            <div class="form-group">
+              <label>Contact *</label>
+              <select name="contactId" required>
+                <option value="">Select Contact</option>
+                ${CONTACTS.map(c => `<option value="${c.id}" ${(project?.contact_id === c.id || contactId === c.id) ? 'selected' : ''}>${c.name || c.company}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Name *</label>
+              <input type="text" name="name" value="${project?.name || ''}" required>
+            </div>
+            <div class="form-group">
+              <label>Value ($)</label>
+              <input type="number" step="0.01" name="value" value="${project?.value || ''}">
+            </div>
+            <div class="form-group">
+              <label>Stage *</label>
+              <select name="stage" required>
+                ${STAGES.map(s => `<option value="${s}" ${project?.stage === s ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Next Date</label>
+              <input type="date" name="next" value="${nextDate}">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea name="notes" rows="3">${project?.notes || ''}</textarea>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      });
+    }
+    
+    async function saveProject(e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        id, contactId: form.contactId.value, name: form.name.value,
+        value: form.value.value, stage: form.stage.value, next: form.next.value, notes: form.notes.value
+      };
+      await api('projects.save', { method: 'POST', body: JSON.stringify(data) });
+      closeModal();
+      await renderProjects();
+    }
+    
+    async function deleteProject(id) {
+      if (!confirm('Delete this project?')) return;
+      await api(`projects.delete&id=${id}`, { method: 'DELETE' });
+      await renderProjects();
+    }
+    
+    async function renderSettings() {
+      await loadCountries();
+      const defaultCountry = await api('settings.get&key=defaultCountry');
+      const isAdmin = currentUser.role === 'admin';
+      
+      document.getElementById('view-settings').innerHTML = `
+        <div class="card">
+          <h3>Default Country Code</h3>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <select id="defaultCountry">
+              ${COUNTRIES.map(c => `<option value="${c.code}" ${defaultCountry.value === c.code ? 'selected' : ''}>${c.code} ${c.name}</option>`).join('')}
+            </select>
+            <button class="btn" onclick="saveDefaultCountry()">Save</button>
+          </div>
+        </div>
+        ${isAdmin ? `
+        <div class="card" style="margin-top: 16px;">
+          <h3>Export / Import</h3>
+          <button class="btn" onclick="exportData()">⬇️ Export JSON</button>
+          <button class="btn warning" onclick="document.getElementById('importFile').click()">⬆️ Import JSON</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none" onchange="importData(event)" />
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <h3>Danger Zone</h3>
+          <button class="btn danger" onclick="resetDatabase()">Reset Database (truncate)</button>
+        </div>
+        ` : ''}
+      `;
+    }
+    
+    async function saveDefaultCountry() {
+      const value = document.getElementById('defaultCountry').value;
+      await api('settings.set', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'defaultCountry', value })
+      });
+      alert('Default country saved');
+    }
+    
+    async function exportData() {
+      window.location.href = '?api=export';
+    }
+    
+    async function importData(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!confirm('This will replace all contacts, calls, projects, and settings. Continue?')) return;
+      try {
+        await api('import', { method: 'POST', body: JSON.stringify(data) });
+        alert('Import successful');
+        renderSettings();
+      } catch (err) {
+        alert('Import failed: ' + err.message);
+      }
+    }
+    
+    async function resetDatabase() {
+      if (!confirm('This will permanently delete ALL contacts, calls, projects, and settings. Are you absolutely sure?')) return;
+      if (!confirm('Last warning: This cannot be undone!')) return;
+      await api('reset', { method: 'POST' });
+      alert('Database reset complete');
+      renderSettings();
     }
     
     checkSession();
