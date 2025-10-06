@@ -1875,6 +1875,8 @@ if (isset($_GET['favicon'])) {
           <td>${c.duration_min || 0}</td>
           <td>${c.notes || '-'}</td>
           <td>
+            <button class="btn" onclick="viewCallUpdates(${c.id})">View Updates</button>
+            <button class="btn" onclick="addCallUpdate(${c.id})">Add Update</button>
             <button class="btn" onclick="openCallForm(${c.id})">Edit</button>
             <button class="btn danger" onclick="deleteCall(${c.id})">Delete</button>
           </td>
@@ -1946,6 +1948,49 @@ if (isset($_GET['favicon'])) {
       if (!confirm('Delete this call?')) return;
       await api(`calls.delete&id=${id}`, { method: 'DELETE' });
       await loadCalls();
+    }
+    
+    async function viewCallUpdates(callId) {
+      const data = await api(`call_updates.list&call_id=${callId}`);
+      const updates = data.items;
+      showModal(`
+        <h3>Call Updates</h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+          ${updates.length > 0 ? updates.map(u => `
+            <div class="history-item">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span class="type">${u.user_name || 'Unknown User'}</span>
+                <span class="time">${new Date(u.created_at).toLocaleString()}</span>
+              </div>
+              <div>${u.notes || 'No notes'}</div>
+            </div>
+          `).join('') : '<p style="color: var(--muted);">No updates yet</p>'}
+        </div>
+        <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+      `);
+    }
+    
+    function addCallUpdate(callId) {
+      showModal(`
+        <h3>Add Call Update</h3>
+        <form onsubmit="saveCallUpdate(event, ${callId})">
+          <div class="form-group">
+            <label>Notes *</label>
+            <textarea name="notes" rows="4" required placeholder="Add update notes..."></textarea>
+          </div>
+          <button type="submit" class="btn">Add Update</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveCallUpdate(e, callId) {
+      e.preventDefault();
+      const form = e.target;
+      const data = { call_id: callId, notes: form.notes.value };
+      await api('call_updates.save', { method: 'POST', body: JSON.stringify(data) });
+      closeModal();
+      alert('Update added successfully');
     }
     
     async function renderProjects() {
