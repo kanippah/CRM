@@ -839,18 +839,21 @@ if (isset($_GET['favicon'])) {
       position: fixed;
       top: 20px;
       left: 20px;
-      z-index: 100;
+      z-index: 1000;
       background: var(--brand);
       color: white;
       border: none;
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 10px 14px;
       cursor: pointer;
-      transition: left 0.3s;
+      transition: all 0.3s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      font-size: 16px;
+      font-weight: bold;
     }
     
     .sidebar-toggle.shifted {
-      left: 300px;
+      left: 240px;
     }
     
     .logo-area {
@@ -891,7 +894,11 @@ if (isset($_GET['favicon'])) {
     .nav button:hover { background: var(--bg); }
     .nav button.active { background: var(--brand); color: white; }
     
-    .content { flex: 1; padding: 24px; overflow-y: auto; }
+    .content { flex: 1; padding: 24px; overflow-y: auto; transition: padding-left 0.3s; }
+    
+    body.sidebar-collapsed .content {
+      padding-left: 80px;
+    }
     
     .toolbar {
       display: flex;
@@ -1326,10 +1333,12 @@ if (isset($_GET['favicon'])) {
         sidebar.classList.add('collapsed');
         toggleBtn.classList.remove('shifted');
         toggleBtn.textContent = '☰';
+        document.body.classList.add('sidebar-collapsed');
       } else {
         sidebar.classList.remove('collapsed');
         toggleBtn.classList.add('shifted');
         toggleBtn.textContent = '✕';
+        document.body.classList.remove('sidebar-collapsed');
       }
     }
     
