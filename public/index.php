@@ -771,6 +771,12 @@ if (isset($_GET['favicon'])) {
   readfile('favicon.png');
   exit;
 }
+
+if (isset($_GET['background'])) {
+  header('Content-Type: image/jpeg');
+  readfile('../attached_assets/stock_images/professional_modern__2458abbf.jpg');
+  exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1015,7 +1021,7 @@ if (isset($_GET['favicon'])) {
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, var(--kt-blue), var(--kt-dark-blue));
+      background: linear-gradient(135deg, rgba(0, 102, 204, 0.85), rgba(0, 51, 102, 0.85)), url('?background') center/cover no-repeat;
     }
     
     .login-box {
@@ -1201,6 +1207,17 @@ if (isset($_GET['favicon'])) {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      max-width: 100%;
+    }
+    
+    .kanban-card-title,
+    .kanban-card-contact,
+    .kanban-card-value,
+    .kanban-card-date {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
     }
     
     .kanban-actions {
@@ -1473,20 +1490,22 @@ if (isset($_GET['favicon'])) {
         const canGrab = currentUser.role === 'sales' && isGlobal;
         const canView = currentUser.role === 'admin' || lead.assigned_to == currentUser.id;
         const isHidden = lead.email === '***';
+        const displayName = isGlobal && lead.company ? lead.company : lead.name;
         
         return `
           <tr>
-            <td><strong>${lead.name}</strong></td>
-            <td>${lead.phone}</td>
+            <td><strong>${displayName}</strong></td>
+            <td>${isHidden ? '***' : lead.phone}</td>
             <td>${lead.email}</td>
             <td>${lead.company || '-'}</td>
-            <td>${lead.address}</td>
+            <td>${isHidden ? '***' : lead.address}</td>
             <td><span class="badge ${lead.status}">${lead.status}</span></td>
             <td>${lead.assigned_name || '-'}</td>
             <td>
               ${canGrab ? `<button class="btn success" onclick="grabLead(${lead.id})">Grab</button>` : ''}
               ${canView && !isHidden ? `<button class="btn secondary" onclick="viewLead(${lead.id})">View</button>` : ''}
               ${currentUser.role === 'admin' ? `<button class="btn" onclick="openLeadForm(${lead.id})">Edit</button>` : ''}
+              ${currentUser.role === 'admin' ? `<button class="btn" onclick="openAssignModal(${lead.id})">Assign</button>` : ''}
               ${currentUser.role === 'admin' ? `<button class="btn danger" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
             </td>
           </tr>
@@ -1502,6 +1521,49 @@ if (isset($_GET['favicon'])) {
           body: JSON.stringify({ id })
         });
         alert('Lead grabbed successfully!');
+        await loadLeads();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function openAssignModal(leadId) {
+      const usersData = await api('users.list');
+      const leadsData = await api('leads.list&q=');
+      const lead = leadsData.items.find(l => l.id === leadId);
+      
+      showModal(`
+        <h3>Assign Lead: ${lead.name}</h3>
+        <form onsubmit="assignLead(event, ${leadId})">
+          <div class="form-group">
+            <label>Assign To *</label>
+            <select name="userId" required>
+              <option value="">Select User</option>
+              ${usersData.items.filter(u => u.role === 'sales').map(u => `
+                <option value="${u.id}" ${lead.assigned_to == u.id ? 'selected' : ''}>${u.full_name}</option>
+              `).join('')}
+            </select>
+          </div>
+          <button type="submit" class="btn">Assign</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function assignLead(e, leadId) {
+      e.preventDefault();
+      const form = e.target;
+      try {
+        await api('leads.save', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: leadId,
+            assigned_to: form.userId.value,
+            status: 'assigned'
+          })
+        });
+        closeModal();
+        alert('Lead assigned successfully!');
         await loadLeads();
       } catch (e) {
         alert('Error: ' + e.message);
@@ -2005,7 +2067,7 @@ if (isset($_GET['favicon'])) {
         <div class="card">
           <table id="callsTable">
             <thead>
-              <tr><th>When</th><th>Contact</th><th>Outcome</th><th>Duration (min)</th><th>Notes</th><th>Actions</th></tr>
+              <tr><th>Contact</th><th>When</th><th>Outcome</th><th>Duration (min)</th><th>Notes</th><th>Actions</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -2020,8 +2082,8 @@ if (isset($_GET['favicon'])) {
       const tbody = document.querySelector('#callsTable tbody');
       tbody.innerHTML = data.items.map(c => `
         <tr>
+          <td><strong>${c.contact_name || c.contact_company || 'N/A'}</strong></td>
           <td>${new Date(c.when_at).toLocaleString()}</td>
-          <td>${c.contact_name || c.contact_company || 'N/A'}</td>
           <td><span class="badge">${c.outcome}</span></td>
           <td>${c.duration_min || 0}</td>
           <td>${c.notes || '-'}</td>
@@ -2273,12 +2335,17 @@ if (isset($_GET['favicon'])) {
           <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
             <strong style="color: var(--brand);">Notes History</strong>
             <div style="margin-top: 8px; max-height: 300px; overflow-y: auto;">
-              ${project.notes.split('\\n---\\n').map((note, idx) => `
-                <div style="padding: 8px; background: var(--panel); border-left: 3px solid var(--accent); margin-bottom: 8px; border-radius: 4px;">
-                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">${idx === 0 ? 'Initial' : 'Update ' + idx}</div>
-                  <div style="white-space: pre-wrap;">${note}</div>
-                </div>
-              `).join('')}
+              ${project.notes.split('\\n---\\n').map((note, idx) => {
+                const timestampMatch = note.match(/^\[([^\]]+)\]\s*/);
+                const timestamp = timestampMatch ? new Date(timestampMatch[1]).toLocaleString() : (idx === 0 ? new Date(project.created_at).toLocaleString() : 'Unknown date');
+                const noteText = timestampMatch ? note.substring(timestampMatch[0].length) : note;
+                return `
+                  <div style="padding: 8px; background: var(--panel); border-left: 3px solid var(--accent); margin-bottom: 8px; border-radius: 4px;">
+                    <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">📅 ${timestamp}</div>
+                    <div style="white-space: pre-wrap;">${noteText}</div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
           ` : '<div style="color: var(--muted); font-style: italic;">No notes yet</div>'}
@@ -2316,8 +2383,10 @@ if (isset($_GET['favicon'])) {
       const project = data.items.find(p => p.id === projectId);
       if (!project) return;
       
+      const timestamp = new Date().toISOString();
+      const noteWithTimestamp = `[${timestamp}] ${note}`;
       const existingNotes = project.notes || '';
-      const newNotes = existingNotes ? `${existingNotes}\\n---\\n${note}` : note;
+      const newNotes = existingNotes ? `${existingNotes}\\n---\\n${noteWithTimestamp}` : noteWithTimestamp;
       
       await api('projects.save', {
         method: 'POST',
