@@ -159,9 +159,12 @@ SQL);
 
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
   if (!$admin_exists) {
-    $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES ('admin', :pwd, 'Administrator', 'admin')")
+    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koadi.tech', :pwd, 'Administrator', 'admin')")
       ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
   }
+  
+  // Update existing admin user to have email if missing
+  $pdo->exec("UPDATE users SET email = 'admin@koadi.tech' WHERE username = 'admin' AND (email IS NULL OR email = '')");
 }
 
 ensure_schema();
@@ -237,27 +240,34 @@ function require_admin() {
 
 function api_login() {
   $b = body_json();
-  $username = $b['username'] ?? '';
+  $email = trim($b['email'] ?? '');
   $password = $b['password'] ?? '';
   
+  // Validate email format
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['error' => 'Invalid email format'], 400);
+  }
+  
   $pdo = db();
-  $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :u");
-  $stmt->execute([':u' => $username]);
+  $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:e)");
+  $stmt->execute([':e' => $email]);
   $user = $stmt->fetch();
   
   if ($user && password_verify($password, $user['password'])) {
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['username'] = $user['username'];
+    $_SESSION['email'] = $user['email'];
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role'];
     respond(['ok' => true, 'user' => [
       'id' => $user['id'],
       'username' => $user['username'],
+      'email' => $user['email'],
       'full_name' => $user['full_name'],
       'role' => $user['role']
     ]]);
   } else {
-    respond(['error' => 'Invalid credentials'], 401);
+    respond(['error' => 'Invalid email or password'], 401);
   }
 }
 
@@ -282,7 +292,7 @@ function api_session() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, full_name, role, created_at FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, created_at FROM users ORDER BY id DESC")->fetchAll();
   respond(['items' => $users]);
 }
 
@@ -292,23 +302,44 @@ function api_users_save() {
   $pdo = db();
   
   $id = $b['id'] ?? null;
+  $email = trim($b['email'] ?? '');
   $username = trim($b['username'] ?? '');
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
   
+  // Validate email format
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['error' => 'Invalid email format'], 400);
+  }
+  
+  // Check if email already exists (excluding current user if editing)
+  if ($id) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e) AND id != :id");
+    $stmt->execute([':e' => $email, ':id' => $id]);
+  } else {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
+    $stmt->execute([':e' => $email]);
+  }
+  if ($stmt->fetch()) {
+    respond(['error' => 'Email already exists'], 400);
+  }
+  
   if ($id) {
     if ($password) {
-      $stmt = $pdo->prepare("UPDATE users SET username=:u, full_name=:n, role=:r, password=:p WHERE id=:id RETURNING id, username, full_name, role");
-      $stmt->execute([':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p WHERE id=:id RETURNING id, username, email, full_name, role");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':id' => $id]);
     } else {
-      $stmt = $pdo->prepare("UPDATE users SET username=:u, full_name=:n, role=:r WHERE id=:id RETURNING id, username, full_name, role");
-      $stmt->execute([':u' => $username, ':n' => $full_name, ':r' => $role, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r WHERE id=:id RETURNING id, username, email, full_name, role");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':id' => $id]);
     }
     $user = $stmt->fetch();
   } else {
-    $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (:u, :p, :n, :r) RETURNING id, username, full_name, role");
-    $stmt->execute([':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
+    if (!$password) {
+      respond(['error' => 'Password is required for new users'], 400);
+    }
+    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id, username, email, full_name, role");
+    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
     $user = $stmt->fetch();
   }
   
@@ -1392,7 +1423,7 @@ if (isset($_GET['background'])) {
             <h2 style="margin-bottom: 24px;">CRM Login</h2>
             <form onsubmit="handleLogin(event)">
               <div class="form-group">
-                <input type="text" name="username" placeholder="Username" autocomplete="username" required>
+                <input type="email" name="email" placeholder="Email" autocomplete="email" required>
               </div>
               <div class="form-group">
                 <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -1400,7 +1431,7 @@ if (isset($_GET['background'])) {
               <button type="submit" class="btn" style="width: 100%;">Login</button>
             </form>
             <p style="margin-top: 20px; color: var(--muted); font-size: 12px;">
-              Default: admin / admin123
+              Default: admin@koadi.tech / admin123
             </p>
           </div>
         </div>
@@ -1410,13 +1441,20 @@ if (isset($_GET['background'])) {
     async function handleLogin(e) {
       e.preventDefault();
       const form = e.target;
-      const username = form.username.value;
+      const email = form.email.value.trim();
       const password = form.password.value;
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        return;
+      }
       
       try {
         await api('login', {
           method: 'POST',
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ email, password })
         });
         await checkSession();
       } catch (e) {
@@ -1870,6 +1908,7 @@ if (isset($_GET['background'])) {
           <table id="usersTable">
             <thead>
               <tr>
+                <th>Email</th>
                 <th>Username</th>
                 <th>Full Name</th>
                 <th>Role</th>
@@ -1891,7 +1930,8 @@ if (isset($_GET['background'])) {
       
       tbody.innerHTML = data.items.map(user => `
         <tr>
-          <td><strong>${user.username}</strong></td>
+          <td><strong>${user.email || 'N/A'}</strong></td>
+          <td>${user.username}</td>
           <td>${user.full_name}</td>
           <td><span class="badge ${user.role}">${user.role}</span></td>
           <td>${new Date(user.created_at).toLocaleDateString()}</td>
@@ -1918,6 +1958,10 @@ if (isset($_GET['background'])) {
       showModal(`
         <h3>${user ? 'Edit User' : 'Add User'}</h3>
         <form onsubmit="saveUser(event, ${user ? user.id : 'null'})">
+          <div class="form-group">
+            <label>Email *</label>
+            <input type="email" name="email" value="${user?.email || ''}" placeholder="user@example.com" required>
+          </div>
           <div class="form-group">
             <label>Username *</label>
             <input type="text" name="username" value="${user?.username || ''}" required>
@@ -1946,8 +1990,18 @@ if (isset($_GET['background'])) {
     async function saveUser(e, id) {
       e.preventDefault();
       const form = e.target;
+      
+      // Validate email format
+      const email = form.email.value.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        return;
+      }
+      
       const data = {
         id,
+        email: email,
         username: form.username.value,
         full_name: form.full_name.value,
         password: form.password.value,
