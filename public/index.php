@@ -570,23 +570,13 @@ function api_stats() {
 function api_contacts_list() {
   require_auth();
   $p = db();
-  $user = current_user();
   $q = $_GET['q'] ?? '';
   
-  $baseQuery = "SELECT c.*, u.full_name as assigned_user FROM contacts c LEFT JOIN users u ON c.assigned_to = u.id";
-  $whereClause = "";
-  
-  // For sales users, only show their assigned contacts (or unassigned if admin wants them to see all)
-  if ($user['role'] === 'sales') {
-    $whereClause = " WHERE (c.assigned_to = {$user['id']} OR c.assigned_to IS NULL)";
-  }
-  
   if ($q !== '') {
-    $connector = ($whereClause ? ' AND' : ' WHERE');
-    $s = $p->prepare($baseQuery . $whereClause . $connector . " (c.name ILIKE :q OR c.company ILIKE :q OR c.email ILIKE :q OR (COALESCE(c.phone_country,'')||COALESCE(c.phone_number,'')) ILIKE :q) ORDER BY c.id DESC");
+    $s = $p->prepare("SELECT c.*, u.full_name as assigned_user FROM contacts c LEFT JOIN users u ON c.assigned_to = u.id WHERE (c.name ILIKE :q OR c.company ILIKE :q OR c.email ILIKE :q OR (COALESCE(c.phone_country,'')||COALESCE(c.phone_number,'')) ILIKE :q) ORDER BY c.id DESC");
     $s->execute([':q' => '%' . $q . '%']);
   } else {
-    $s = $p->query($baseQuery . $whereClause . " ORDER BY c.id DESC");
+    $s = $p->query("SELECT c.*, u.full_name as assigned_user FROM contacts c LEFT JOIN users u ON c.assigned_to = u.id ORDER BY c.id DESC");
   }
   respond(['items' => $s->fetchAll()]);
 }
@@ -658,23 +648,13 @@ function api_contacts_reassign() {
 function api_calls_list() {
   require_auth();
   $p = db();
-  $user = current_user();
   $q = $_GET['q'] ?? '';
   
-  $baseQuery = "SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id";
-  $whereClause = "";
-  
-  // For sales users, only show their assigned calls
-  if ($user['role'] === 'sales') {
-    $whereClause = " WHERE (c.assigned_to = {$user['id']} OR c.assigned_to IS NULL)";
-  }
-  
   if ($q !== '') {
-    $connector = ($whereClause ? ' AND' : ' WHERE');
-    $s = $p->prepare($baseQuery . $whereClause . $connector . " (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
+    $s = $p->prepare("SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id WHERE (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
     $s->execute([':q' => '%' . $q . '%']);
   } else {
-    $s = $p->query($baseQuery . $whereClause . " ORDER BY c.id DESC");
+    $s = $p->query("SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id ORDER BY c.id DESC");
   }
   respond(['items' => $s->fetchAll()]);
 }
@@ -746,17 +726,7 @@ function api_call_updates_save() {
 function api_projects_list() {
   require_auth();
   $p = db();
-  $user = current_user();
-  
-  $baseQuery = "SELECT p.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM projects p LEFT JOIN contacts co ON co.id=p.contact_id LEFT JOIN users u ON p.assigned_to = u.id";
-  $whereClause = "";
-  
-  // For sales users, only show their assigned projects
-  if ($user['role'] === 'sales') {
-    $whereClause = " WHERE (p.assigned_to = {$user['id']} OR p.assigned_to IS NULL)";
-  }
-  
-  $s = $p->query($baseQuery . $whereClause . " ORDER BY p.id DESC");
+  $s = $p->query("SELECT p.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM projects p LEFT JOIN contacts co ON co.id=p.contact_id LEFT JOIN users u ON p.assigned_to = u.id ORDER BY p.id DESC");
   respond(['items' => $s->fetchAll()]);
 }
 
