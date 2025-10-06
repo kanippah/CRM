@@ -43,9 +43,11 @@ function ensure_schema() {
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
+      email TEXT,
       password TEXT NOT NULL,
       full_name TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'sales',
+      remember_token TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     );
     
@@ -81,6 +83,7 @@ function ensure_schema() {
       phone_number TEXT,
       source TEXT,
       notes TEXT,
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -92,6 +95,7 @@ function ensure_schema() {
       outcome TEXT,
       duration_min INTEGER,
       notes TEXT,
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -104,6 +108,7 @@ function ensure_schema() {
       stage TEXT,
       next_date DATE,
       notes TEXT,
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -126,6 +131,30 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (LOWER(BTRIM(COALESCE(company,''))));
     CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_phone_unique ON contacts ((regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,'') ,'\\D','','g'))) WHERE COALESCE(phone_country,'')<>'' AND COALESCE(phone_number,'')<>'';
     CREATE INDEX IF NOT EXISTS idx_call_updates_call ON call_updates(call_id);
+    
+    -- Add assigned_to columns if they don't exist
+    DO $$ 
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='assigned_to') THEN
+        ALTER TABLE contacts ADD COLUMN assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='assigned_to') THEN
+        ALTER TABLE calls ADD COLUMN assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='assigned_to') THEN
+        ALTER TABLE projects ADD COLUMN assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='email') THEN
+        ALTER TABLE users ADD COLUMN email TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='remember_token') THEN
+        ALTER TABLE users ADD COLUMN remember_token TEXT;
+      END IF;
+    END $$;
+    
+    CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_calls_assigned ON calls(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_projects_assigned ON projects(assigned_to);
 SQL);
 
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
@@ -164,10 +193,12 @@ if (isset($_GET['api'])) {
       case 'contacts.list': api_contacts_list(); break;
       case 'contacts.save': api_contacts_save(); break;
       case 'contacts.delete': api_contacts_delete(); break;
+      case 'contacts.reassign': api_contacts_reassign(); break;
       
       case 'calls.list': api_calls_list(); break;
       case 'calls.save': api_calls_save(); break;
       case 'calls.delete': api_calls_delete(); break;
+      case 'calls.reassign': api_calls_reassign(); break;
       case 'call_updates.list': api_call_updates_list(); break;
       case 'call_updates.save': api_call_updates_save(); break;
       
@@ -175,6 +206,7 @@ if (isset($_GET['api'])) {
       case 'projects.save': api_projects_save(); break;
       case 'projects.delete': api_projects_delete(); break;
       case 'projects.stage': api_projects_stage(); break;
+      case 'projects.reassign': api_projects_reassign(); break;
       
       case 'settings.get': api_settings_get(); break;
       case 'settings.set': api_settings_set(); break;
@@ -505,12 +537,23 @@ function api_stats() {
 function api_contacts_list() {
   require_auth();
   $p = db();
+  $user = current_user();
   $q = $_GET['q'] ?? '';
+  
+  $baseQuery = "SELECT c.*, u.full_name as assigned_user FROM contacts c LEFT JOIN users u ON c.assigned_to = u.id";
+  $whereClause = "";
+  
+  // For sales users, only show their assigned contacts (or unassigned if admin wants them to see all)
+  if ($user['role'] === 'sales') {
+    $whereClause = " WHERE (c.assigned_to = {$user['id']} OR c.assigned_to IS NULL)";
+  }
+  
   if ($q !== '') {
-    $s = $p->prepare("SELECT * FROM contacts WHERE (name ILIKE :q OR company ILIKE :q OR email ILIKE :q OR (COALESCE(phone_country,'')||COALESCE(phone_number,'')) ILIKE :q) ORDER BY id DESC");
+    $connector = ($whereClause ? ' AND' : ' WHERE');
+    $s = $p->prepare($baseQuery . $whereClause . $connector . " (c.name ILIKE :q OR c.company ILIKE :q OR c.email ILIKE :q OR (COALESCE(c.phone_country,'')||COALESCE(c.phone_number,'')) ILIKE :q) ORDER BY c.id DESC");
     $s->execute([':q' => '%' . $q . '%']);
   } else {
-    $s = $p->query("SELECT * FROM contacts ORDER BY id DESC");
+    $s = $p->query($baseQuery . $whereClause . " ORDER BY c.id DESC");
   }
   respond(['items' => $s->fetchAll()]);
 }
@@ -569,15 +612,36 @@ function api_contacts_delete() {
   respond(['ok' => true]);
 }
 
+function api_contacts_reassign() {
+  require_admin();
+  $p = db();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $userId = $b['userId'] ? (int)$b['userId'] : null;
+  $p->prepare("UPDATE contacts SET assigned_to=:uid WHERE id=:id")->execute([':uid' => $userId, ':id' => $id]);
+  respond(['ok' => true]);
+}
+
 function api_calls_list() {
   require_auth();
   $p = db();
+  $user = current_user();
   $q = $_GET['q'] ?? '';
+  
+  $baseQuery = "SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id";
+  $whereClause = "";
+  
+  // For sales users, only show their assigned calls
+  if ($user['role'] === 'sales') {
+    $whereClause = " WHERE (c.assigned_to = {$user['id']} OR c.assigned_to IS NULL)";
+  }
+  
   if ($q !== '') {
-    $s = $p->prepare("SELECT c.*, co.name AS contact_name, co.company AS contact_company FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id WHERE (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
+    $connector = ($whereClause ? ' AND' : ' WHERE');
+    $s = $p->prepare($baseQuery . $whereClause . $connector . " (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
     $s->execute([':q' => '%' . $q . '%']);
   } else {
-    $s = $p->query("SELECT c.*, co.name AS contact_name, co.company AS contact_company FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id ORDER BY c.id DESC");
+    $s = $p->query($baseQuery . $whereClause . " ORDER BY c.id DESC");
   }
   respond(['items' => $s->fetchAll()]);
 }
@@ -614,6 +678,16 @@ function api_calls_delete() {
   respond(['ok' => true]);
 }
 
+function api_calls_reassign() {
+  require_admin();
+  $p = db();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $userId = $b['userId'] ? (int)$b['userId'] : null;
+  $p->prepare("UPDATE calls SET assigned_to=:uid WHERE id=:id")->execute([':uid' => $userId, ':id' => $id]);
+  respond(['ok' => true]);
+}
+
 function api_call_updates_list() {
   require_auth();
   $p = db();
@@ -639,7 +713,17 @@ function api_call_updates_save() {
 function api_projects_list() {
   require_auth();
   $p = db();
-  $s = $p->query("SELECT p.*, co.name AS contact_name, co.company AS contact_company FROM projects p LEFT JOIN contacts co ON co.id=p.contact_id ORDER BY p.id DESC");
+  $user = current_user();
+  
+  $baseQuery = "SELECT p.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM projects p LEFT JOIN contacts co ON co.id=p.contact_id LEFT JOIN users u ON p.assigned_to = u.id";
+  $whereClause = "";
+  
+  // For sales users, only show their assigned projects
+  if ($user['role'] === 'sales') {
+    $whereClause = " WHERE (p.assigned_to = {$user['id']} OR p.assigned_to IS NULL)";
+  }
+  
+  $s = $p->query($baseQuery . $whereClause . " ORDER BY p.id DESC");
   respond(['items' => $s->fetchAll()]);
 }
 
@@ -687,6 +771,16 @@ function api_projects_stage() {
   $s->execute([':s' => $stage, ':u' => $now, ':id' => $id]);
   $row = $s->fetch();
   respond(['item' => $row]);
+}
+
+function api_projects_reassign() {
+  require_admin();
+  $p = db();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $userId = $b['userId'] ? (int)$b['userId'] : null;
+  $p->prepare("UPDATE projects SET assigned_to=:uid WHERE id=:id")->execute([':uid' => $userId, ':id' => $id]);
+  respond(['ok' => true]);
 }
 
 function api_settings_get() {
@@ -1393,6 +1487,9 @@ if (isset($_GET['background'])) {
             <div id="view-leads" class="view active"></div>
             ${isAdmin ? '<div id="view-users" class="view"></div>' : ''}
             <div id="view-settings" class="view"></div>
+            <footer style="text-align: center; padding: 20px; margin-top: 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border);">
+              @2025 Koadi Technology LLC
+            </footer>
           </main>
         </div>
       `;
