@@ -684,7 +684,7 @@ function api_export() {
     'settings' => $p->query("SELECT * FROM settings ORDER BY key")->fetchAll(),
   ];
   header('Content-Disposition: attachment; filename="mini_crm_export.json"');
-  respond($data, 200, 'application/json');
+  respond($data);
 }
 
 function api_import() {
