@@ -149,6 +149,29 @@ if (isset($_GET['api'])) {
       case 'interactions.list': api_interactions_list(); break;
       case 'interactions.save': api_interactions_save(); break;
       
+      case 'stats': api_stats(); break;
+      case 'countries': api_countries(); break;
+      
+      case 'contacts.list': api_contacts_list(); break;
+      case 'contacts.save': api_contacts_save(); break;
+      case 'contacts.delete': api_contacts_delete(); break;
+      
+      case 'calls.list': api_calls_list(); break;
+      case 'calls.save': api_calls_save(); break;
+      case 'calls.delete': api_calls_delete(); break;
+      
+      case 'projects.list': api_projects_list(); break;
+      case 'projects.save': api_projects_save(); break;
+      case 'projects.delete': api_projects_delete(); break;
+      case 'projects.stage': api_projects_stage(); break;
+      
+      case 'settings.get': api_settings_get(); break;
+      case 'settings.set': api_settings_set(); break;
+      
+      case 'export': api_export(); break;
+      case 'import': api_import(); break;
+      case 'reset': api_reset(); break;
+      
       default: respond(['error' => 'Unknown action'], 404);
     }
   } catch (Throwable $e) {
@@ -437,6 +460,269 @@ function api_interactions_save() {
   $stmt->execute([':lid' => $lead_id, ':uid' => $user_id, ':t' => $type, ':n' => $notes]);
   
   respond(['item' => $stmt->fetch()]);
+}
+
+function COUNTRIES_DATA() {
+  return [
+    ['code' => '+1', 'name' => 'United States'], ['code' => '+1', 'name' => 'Canada'], ['code' => '+44', 'name' => 'United Kingdom'],
+    ['code' => '+61', 'name' => 'Australia'], ['code' => '+234', 'name' => 'Nigeria'], ['code' => '+233', 'name' => 'Ghana'],
+    ['code' => '+27', 'name' => 'South Africa'], ['code' => '+91', 'name' => 'India'], ['code' => '+49', 'name' => 'Germany'],
+    ['code' => '+33', 'name' => 'France'], ['code' => '+34', 'name' => 'Spain'], ['code' => '+39', 'name' => 'Italy'],
+    ['code' => '+81', 'name' => 'Japan'], ['code' => '+86', 'name' => 'China'], ['code' => '+971', 'name' => 'UAE'],
+    ['code' => '+973', 'name' => 'Bahrain'], ['code' => '+974', 'name' => 'Qatar'], ['code' => '+966', 'name' => 'Saudi Arabia'],
+    ['code' => '+55', 'name' => 'Brazil'], ['code' => '+52', 'name' => 'Mexico']
+  ];
+}
+
+function api_countries() {
+  respond(['items' => COUNTRIES_DATA()]);
+}
+
+function api_stats() {
+  require_auth();
+  $p = db();
+  $contacts = (int)$p->query("SELECT COUNT(*) FROM contacts")->fetchColumn();
+  $calls7 = (int)$p->query("SELECT COUNT(*) FROM calls WHERE when_at >= now()-interval '7 days'")->fetchColumn();
+  $openProjects = (int)$p->query("SELECT COUNT(*) FROM projects WHERE COALESCE(stage,'') <> 'Won'")->fetchColumn();
+  $recentContacts = $p->query("SELECT id,name,company,phone_country,phone_number FROM contacts ORDER BY id DESC LIMIT 5")->fetchAll();
+  $recentCalls = $p->query("SELECT c.when_at,c.outcome,c.notes,co.name,co.company FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id ORDER BY c.id DESC LIMIT 5")->fetchAll();
+  respond(compact('contacts', 'calls7', 'openProjects', 'recentContacts', 'recentCalls'));
+}
+
+function api_contacts_list() {
+  require_auth();
+  $p = db();
+  $q = $_GET['q'] ?? '';
+  if ($q !== '') {
+    $s = $p->prepare("SELECT * FROM contacts WHERE (name ILIKE :q OR company ILIKE :q OR email ILIKE :q OR (COALESCE(phone_country,'')||COALESCE(phone_number,'')) ILIKE :q) ORDER BY id DESC");
+    $s->execute([':q' => '%' . $q . '%']);
+  } else {
+    $s = $p->query("SELECT * FROM contacts ORDER BY id DESC");
+  }
+  respond(['items' => $s->fetchAll()]);
+}
+
+function api_contacts_save() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $id = $b['id'] ?? null;
+  $type = $b['type'] ?? 'Individual';
+  $company = trim($b['company'] ?? '');
+  $name = trim($b['name'] ?? '');
+  $email = trim($b['email'] ?? '');
+  $pc = $b['phoneCountry'] ?? '';
+  $pn = preg_replace('/\s+/', '', $b['phoneNumber'] ?? '');
+  $source = trim($b['source'] ?? '');
+  $notes = trim($b['notes'] ?? '');
+  $now = date('c');
+
+  $dup = null;
+  $norm = normalize_phone($pc, $pn);
+  if ($norm) {
+    $sql = "SELECT * FROM contacts WHERE (regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,'') ,'\\D','','g') = :np)" . ($id ? " AND id<>:id" : "") . " LIMIT 1";
+    $s = $p->prepare($sql);
+    $pr = [':np' => $norm];
+    if ($id) $pr[':id'] = $id;
+    $s->execute($pr);
+    $dup = $s->fetch();
+  }
+  if (!$dup && $company !== '') {
+    $sql = "SELECT * FROM contacts WHERE LOWER(BTRIM(company)) = LOWER(BTRIM(:c))" . ($id ? " AND id<>:id" : "") . " LIMIT 1";
+    $s = $p->prepare($sql);
+    $pr = [':c' => $company];
+    if ($id) $pr[':id'] = $id;
+    $s->execute($pr);
+    $dup = $s->fetch();
+  }
+
+  if ($id) {
+    $s = $p->prepare("UPDATE contacts SET type=:t,company=:co,name=:n,email=:e,phone_country=:pc,phone_number=:pn,source=:s,notes=:no,updated_at=:u WHERE id=:id RETURNING *");
+    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':u' => $now, ':id' => $id]);
+    $row = $s->fetch();
+  } else {
+    $s = $p->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u) RETURNING *");
+    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':c' => $now, ':u' => $now]);
+    $row = $s->fetch();
+  }
+  respond(['item' => $row, 'duplicate_of' => $dup ? ($dup['company'] ?: $dup['name']) : null]);
+}
+
+function api_contacts_delete() {
+  require_auth();
+  $p = db();
+  $id = (int)($_GET['id'] ?? 0);
+  $p->prepare("DELETE FROM contacts WHERE id=:id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
+function api_calls_list() {
+  require_auth();
+  $p = db();
+  $q = $_GET['q'] ?? '';
+  if ($q !== '') {
+    $s = $p->prepare("SELECT c.*, co.name AS contact_name, co.company AS contact_company FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id WHERE (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
+    $s->execute([':q' => '%' . $q . '%']);
+  } else {
+    $s = $p->query("SELECT c.*, co.name AS contact_name, co.company AS contact_company FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id ORDER BY c.id DESC");
+  }
+  respond(['items' => $s->fetchAll()]);
+}
+
+function api_calls_save() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $id = $b['id'] ?? null;
+  $cid = (int)($b['contactId'] ?? 0);
+  $when = $b['when'] ?? date('c');
+  $outc = $b['outcome'] ?? 'Attempted';
+  $dur = (int)($b['durationMin'] ?? 0);
+  $notes = trim($b['notes'] ?? '');
+  $now = date('c');
+
+  if ($id) {
+    $s = $p->prepare("UPDATE calls SET contact_id=:cid,when_at=:w,outcome=:o,duration_min=:d,notes=:n,updated_at=:u WHERE id=:id RETURNING *");
+    $s->execute([':cid' => $cid, ':w' => $when, ':o' => $outc, ':d' => $dur, ':n' => $notes, ':u' => $now, ':id' => $id]);
+    $row = $s->fetch();
+  } else {
+    $s = $p->prepare("INSERT INTO calls (contact_id,when_at,outcome,duration_min,notes,created_at,updated_at) VALUES (:cid,:w,:o,:d,:n,:c,:u) RETURNING *");
+    $s->execute([':cid' => $cid, ':w' => $when, ':o' => $outc, ':d' => $dur, ':n' => $notes, ':c' => $now, ':u' => $now]);
+    $row = $s->fetch();
+  }
+  respond(['item' => $row]);
+}
+
+function api_calls_delete() {
+  require_auth();
+  $p = db();
+  $id = (int)($_GET['id'] ?? 0);
+  $p->prepare("DELETE FROM calls WHERE id=:id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
+function api_projects_list() {
+  require_auth();
+  $p = db();
+  $s = $p->query("SELECT p.*, co.name AS contact_name, co.company AS contact_company FROM projects p LEFT JOIN contacts co ON co.id=p.contact_id ORDER BY p.id DESC");
+  respond(['items' => $s->fetchAll()]);
+}
+
+function api_projects_save() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $id = $b['id'] ?? null;
+  $cid = (int)($b['contactId'] ?? 0);
+  $name = trim($b['name'] ?? '');
+  $value = (float)($b['value'] ?? 0);
+  $stage = $b['stage'] ?? 'Lead';
+  $next = $b['next'] ?? null;
+  $notes = trim($b['notes'] ?? '');
+  $now = date('c');
+
+  if ($id) {
+    $s = $p->prepare("UPDATE projects SET contact_id=:cid,name=:n,value=:v,stage=:s,next_date=:nx,notes=:no,updated_at=:u WHERE id=:id RETURNING *");
+    $s->execute([':cid' => $cid, ':n' => $name, ':v' => $value, ':s' => $stage, ':nx' => $next, ':no' => $notes, ':u' => $now, ':id' => $id]);
+    $row = $s->fetch();
+  } else {
+    $s = $p->prepare("INSERT INTO projects (contact_id,name,value,stage,next_date,notes,created_at,updated_at) VALUES (:cid,:n,:v,:s,:nx,:no,:c,:u) RETURNING *");
+    $s->execute([':cid' => $cid, ':n' => $name, ':v' => $value, ':s' => $stage, ':nx' => $next, ':no' => $notes, ':c' => $now, ':u' => $now]);
+    $row = $s->fetch();
+  }
+  respond(['item' => $row]);
+}
+
+function api_projects_delete() {
+  require_auth();
+  $p = db();
+  $id = (int)($_GET['id'] ?? 0);
+  $p->prepare("DELETE FROM projects WHERE id=:id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
+function api_projects_stage() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $stage = $b['stage'] ?? 'Lead';
+  $now = date('c');
+  $s = $p->prepare("UPDATE projects SET stage=:s, updated_at=:u WHERE id=:id RETURNING *");
+  $s->execute([':s' => $stage, ':u' => $now, ':id' => $id]);
+  $row = $s->fetch();
+  respond(['item' => $row]);
+}
+
+function api_settings_get() {
+  require_auth();
+  $p = db();
+  $k = $_GET['key'] ?? '';
+  $s = $p->prepare("SELECT value FROM settings WHERE key=:k");
+  $s->execute([':k' => $k]);
+  $v = $s->fetchColumn();
+  respond(['key' => $k, 'value' => $v]);
+}
+
+function api_settings_set() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $k = $b['key'] ?? '';
+  $v = $b['value'] ?? '';
+  $p->prepare("INSERT INTO settings(key,value) VALUES (:k,:v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")->execute([':k' => $k, ':v' => $v]);
+  respond(['ok' => true]);
+}
+
+function api_export() {
+  require_admin();
+  $p = db();
+  $data = [
+    'contacts' => $p->query("SELECT * FROM contacts ORDER BY id")->fetchAll(),
+    'calls' => $p->query("SELECT * FROM calls ORDER BY id")->fetchAll(),
+    'projects' => $p->query("SELECT * FROM projects ORDER BY id")->fetchAll(),
+    'settings' => $p->query("SELECT * FROM settings ORDER BY key")->fetchAll(),
+  ];
+  header('Content-Disposition: attachment; filename="mini_crm_export.json"');
+  respond($data, 200, 'application/json');
+}
+
+function api_import() {
+  require_admin();
+  $p = db();
+  $b = body_json();
+  $p->beginTransaction();
+  try {
+    $p->exec("TRUNCATE calls, projects, contacts RESTART IDENTITY CASCADE");
+    foreach (($b['contacts'] ?? []) as $r) {
+      $s = $p->prepare("INSERT INTO contacts (id,type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:id,:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u)");
+      $s->execute([':id' => $r['id'], ':t' => $r['type'], ':co' => $r['company'], ':n' => $r['name'], ':e' => $r['email'], ':pc' => $r['phone_country'], ':pn' => $r['phone_number'], ':s' => $r['source'], ':no' => $r['notes'], ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
+    }
+    foreach (($b['projects'] ?? []) as $r) {
+      $s = $p->prepare("INSERT INTO projects (id,contact_id,name,value,stage,next_date,notes,created_at,updated_at) VALUES (:id,:cid,:n,:v,:s,:nx,:no,:c,:u)");
+      $s->execute([':id' => $r['id'], ':cid' => $r['contact_id'], ':n' => $r['name'], ':v' => $r['value'], ':s' => $r['stage'], ':nx' => $r['next_date'], ':no' => $r['notes'], ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
+    }
+    foreach (($b['calls'] ?? []) as $r) {
+      $s = $p->prepare("INSERT INTO calls (id,contact_id,when_at,outcome,duration_min,notes,created_at,updated_at) VALUES (:id,:cid,:w,:o,:d,:n,:c,:u)");
+      $s->execute([':id' => $r['id'], ':cid' => $r['contact_id'], ':w' => $r['when_at'], ':o' => $r['outcome'], ':d' => $r['duration_min'], ':n' => $r['notes'], ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
+    }
+    $p->exec("TRUNCATE settings");
+    foreach (($b['settings'] ?? []) as $r) {
+      $p->prepare("INSERT INTO settings(key,value) VALUES (:k,:v)")->execute([':k' => $r['key'], ':v' => $r['value']]);
+    }
+    $p->commit();
+  } catch (Throwable $e) {
+    $p->rollBack();
+    respond(['error' => 'Import failed', 'detail' => $e->getMessage()], 400);
+  }
+  respond(['ok' => true]);
+}
+
+function api_reset() {
+  require_admin();
+  $p = db();
+  $p->exec("TRUNCATE calls, projects, contacts, settings RESTART IDENTITY CASCADE");
+  respond(['ok' => true]);
 }
 
 if (isset($_GET['logo'])) {
