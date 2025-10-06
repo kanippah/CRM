@@ -33,6 +33,10 @@ function body_json() {
   return json_decode(file_get_contents('php://input'), true) ?: [];
 }
 
+function normalize_phone($country, $number) {
+  return preg_replace('/\D+/', '', ($country ?? '') . ($number ?? ''));
+}
+
 function ensure_schema() {
   $pdo = db();
   $pdo->exec(<<<SQL
@@ -67,8 +71,52 @@ function ensure_schema() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     
+    CREATE TABLE IF NOT EXISTS contacts (
+      id SERIAL PRIMARY KEY,
+      type TEXT,
+      company TEXT,
+      name TEXT,
+      email TEXT,
+      phone_country TEXT,
+      phone_number TEXT,
+      source TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE TABLE IF NOT EXISTS calls (
+      id SERIAL PRIMARY KEY,
+      contact_id INTEGER REFERENCES contacts(id) ON DELETE CASCADE,
+      when_at TIMESTAMPTZ NOT NULL,
+      outcome TEXT,
+      duration_min INTEGER,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE TABLE IF NOT EXISTS projects (
+      id SERIAL PRIMARY KEY,
+      contact_id INTEGER REFERENCES contacts(id) ON DELETE CASCADE,
+      name TEXT,
+      value NUMERIC,
+      stage TEXT,
+      next_date DATE,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+    
     CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (LOWER(BTRIM(COALESCE(company,''))));
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_phone_unique ON contacts ((regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,'') ,'\\D','','g'))) WHERE COALESCE(phone_country,'')<>'' AND COALESCE(phone_number,'')<>'';
 SQL);
 
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
