@@ -8,9 +8,11 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
   - Added Dashboard with statistics and recent activity
   - Implemented Contacts module with duplicate detection by phone/company
   - Created Calls tracking with outcome and duration logging
+  - **Added Call Updates**: Track update history with notes for each call
   - Built Projects module with Kanban board (5 stages: Lead, Qualified, Proposal, Negotiation, Won)
   - Added Settings page with default country selector, export/import, and database reset
   - Integrated 20 country codes for phone numbers
+  - **Sales Lead Creation**: Sales users can now create leads directly in "My Leads"
   - All features available to both admin and sales users
   - Maintained original Leads module functionality
   - Integrated with Replit PostgreSQL database
@@ -42,6 +44,10 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - Outcomes: Attempted, Answered, Voicemail, No Answer, Busy, Wrong Number
 - Search calls by contact, outcome, or notes
 - Complete call history per contact
+- **Call Updates**: Add timestamped notes to calls for follow-up tracking
+  - View all updates with user name and timestamp
+  - Add new updates via "Add Update" button
+  - Update history displayed in chronological order
 
 ### Project Pipeline (All Users)
 - **Kanban Board**: Visual pipeline with drag-and-drop between stages
@@ -59,9 +65,13 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
   - Import JSON data (with transaction rollback on failure)
 - **Database Reset** (Admin only): Clear all data (contacts, calls, projects, settings)
 
-### Lead Management (Original Features)
-- **Global Leads**: Available for all sales users to grab
-- **Personal Leads**: Assigned to specific sales user after grabbing
+### Lead Management (All Users)
+- **Global Leads**: Available for all sales users to grab (Admin created)
+- **Personal Leads**: Assigned to specific sales user after grabbing or creating
+- **Sales Lead Creation**: Sales users can create leads directly in "My Leads"
+  - New leads created by sales are automatically assigned to them
+  - Leads are private and only visible to the creating user
+  - Admin-created leads go to global pool
 - CSV Import for bulk lead upload (Admin only)
 - Interaction history tracking
 - Search functionality across name, phone, location, company
@@ -98,6 +108,12 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - when_at (timestamp), outcome, duration_min, notes
 - created_at, updated_at
 - Indexes: contact_id, when_at
+
+### Call Updates Table
+- id, call_id (FK to calls)
+- user_id (FK to users), notes
+- created_at
+- Indexes: call_id
 
 ### Projects Table
 - id, contact_id (FK to contacts)
@@ -137,6 +153,8 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - `api=calls.list&q=search` - List/search calls
 - `api=calls.save` - Create/update call (POST)
 - `api=calls.delete&id=X` - Delete call (DELETE)
+- `api=call_updates.list&call_id=X` - List updates for a call
+- `api=call_updates.save` - Add update to call (POST)
 
 ### Projects
 - `api=projects.list` - List all projects
