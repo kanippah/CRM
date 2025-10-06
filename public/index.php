@@ -373,11 +373,13 @@ function api_leads_save() {
     $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, updated_at=now() WHERE id=:id RETURNING *");
     $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':id' => $id]);
   } else {
-    if ($_SESSION['role'] !== 'admin') {
-      respond(['error' => 'Only admin can create leads'], 403);
+    if ($_SESSION['role'] === 'admin') {
+      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status) VALUES (:n, :p, :e, :c, :a, 'global') RETURNING *");
+      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address]);
+    } else {
+      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status, assigned_to) VALUES (:n, :p, :e, :c, :a, 'assigned', :uid) RETURNING *");
+      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':uid' => $_SESSION['user_id']]);
     }
-    $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status) VALUES (:n, :p, :e, :c, :a, 'global') RETURNING *");
-    $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address]);
   }
   
   $lead = $stmt->fetch();
@@ -1275,7 +1277,7 @@ if (isset($_GET['favicon'])) {
       
       document.getElementById('view-leads').innerHTML = `
         <div class="toolbar">
-          ${isAdmin ? '<button class="btn" onclick="openLeadForm()">+ Add Lead</button>' : ''}
+          <button class="btn" onclick="openLeadForm()">+ Add Lead</button>
           ${isAdmin ? '<button class="btn warning" onclick="openImportModal()">📥 Import Leads</button>' : ''}
           <input type="text" class="search" id="leadSearch" placeholder="Search by name, phone, address, company..." oninput="loadLeads()">
         </div>
