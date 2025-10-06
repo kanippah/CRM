@@ -1,0 +1,74 @@
+2025-Oct-06 21:18:45.998170
+Starting deployment of kanippah/CRM:main to dark-donkey-akggwww4ww000ws80wg4g00o.
+2025-Oct-06 21:18:46.210360
+Preparing container with helper image: ghcr.io/coollabsio/coolify-helper:1.0.11.
+2025-Oct-06 21:18:46.354457
+[CMD]: docker stop --time=30 ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:46.354457
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-06 21:18:46.356881
+Error response from daemon: No such container: ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:46.481698
+[CMD]: docker rm -f ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:46.481698
+Error response from daemon: No such container: ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:46.636251
+[CMD]: docker run -d --network coolify --name ikscoswkgg8ogck44gg8cwc8  --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/coollabsio/coolify-helper:1.0.11
+2025-Oct-06 21:18:46.636251
+ecd7d9024f554be169054eb946d5fca5ead0a068ea8f865c4ebe2ccc143bec1a
+2025-Oct-06 21:18:47.216247
+[CMD]: docker exec ikscoswkgg8ogck44gg8cwc8 bash -c 'GIT_SSH_COMMAND="ssh -o ConnectTimeout=30 -p 22 -o Port=22 -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git ls-remote https://github.com/kanippah/CRM refs/heads/main'
+2025-Oct-06 21:18:47.216247
+7a90e16d2a19eaaceb5e749b33fda4b23844cbf1	refs/heads/main
+2025-Oct-06 21:18:47.340684
+[CMD]: docker images -q ngg0cow008g8g4ko8ow808o8:7a90e16d2a19eaaceb5e749b33fda4b23844cbf1 2>/dev/null
+2025-Oct-06 21:18:47.340684
+2f0dfca8f5ea
+2025-Oct-06 21:18:47.348977
+No configuration changed & image found (ngg0cow008g8g4ko8ow808o8:7a90e16d2a19eaaceb5e749b33fda4b23844cbf1) with the same Git Commit SHA. Build step skipped.
+2025-Oct-06 21:18:48.051769
+----------------------------------------
+2025-Oct-06 21:18:48.059001
+Rolling update started.
+2025-Oct-06 21:18:48.305200
+[CMD]: docker exec ikscoswkgg8ogck44gg8cwc8 bash -c 'SOURCE_COMMIT=7a90e16d2a19eaaceb5e749b33fda4b23844cbf1 COOLIFY_URL=http://ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io COOLIFY_FQDN=ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=ngg0cow008g8g4ko8ow808o8 COOLIFY_CONTAINER_NAME=ngg0cow008g8g4ko8ow808o8-211843003446  docker compose --project-name ngg0cow008g8g4ko8ow808o8 --project-directory /artifacts/ikscoswkgg8ogck44gg8cwc8 -f /artifacts/ikscoswkgg8ogck44gg8cwc8/docker-compose.yaml up --build -d'
+2025-Oct-06 21:18:48.305200
+time="2025-10-06T21:18:48Z" level=warning msg="Found orphan containers ([ngg0cow008g8g4ko8ow808o8-210337826132]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+2025-Oct-06 21:18:48.305200
+Container ngg0cow008g8g4ko8ow808o8-211843003446  Creating
+2025-Oct-06 21:18:48.338603
+ngg0cow008g8g4ko8ow808o8-211843003446 Your kernel does not support memory swappiness capabilities or the cgroup is not mounted. Memory swappiness discarded.
+2025-Oct-06 21:18:48.341683
+Container ngg0cow008g8g4ko8ow808o8-211843003446  Created
+2025-Oct-06 21:18:48.341683
+Container ngg0cow008g8g4ko8ow808o8-211843003446  Starting
+2025-Oct-06 21:18:48.472158
+Container ngg0cow008g8g4ko8ow808o8-211843003446  Started
+2025-Oct-06 21:18:48.489172
+New container started.
+2025-Oct-06 21:18:48.495553
+Removing old containers.
+2025-Oct-06 21:18:48.736453
+[CMD]: docker stop --time=30 ngg0cow008g8g4ko8ow808o8-210337826132
+2025-Oct-06 21:18:48.736453
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-06 21:18:48.889712
+ngg0cow008g8g4ko8ow808o8-210337826132
+2025-Oct-06 21:18:49.024751
+[CMD]: docker rm -f ngg0cow008g8g4ko8ow808o8-210337826132
+2025-Oct-06 21:18:49.024751
+ngg0cow008g8g4ko8ow808o8-210337826132
+2025-Oct-06 21:18:49.031416
+Rolling update completed.
+2025-Oct-06 21:18:49.359085
+Gracefully shutting down build container: ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:49.504399
+[CMD]: docker stop --time=30 ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:49.504399
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-06 21:18:49.609612
+ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:49.719701
+[CMD]: docker rm -f ikscoswkgg8ogck44gg8cwc8
+2025-Oct-06 21:18:49.719701
+Error response from daemon: No such container: ikscoswkgg8ogck44gg8cwc8

@@ -1,0 +1,7 @@
+.git
+.gitignore
+.replit
+replit.nix
+.config
+*.md
+attached_assets

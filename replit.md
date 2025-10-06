@@ -10,6 +10,7 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
   - Created Calls tracking with outcome and duration logging
   - **Added Call Updates**: Track update history with notes for each call
   - Built Projects module with Kanban board (5 stages: Lead, Qualified, Proposal, Negotiation, Won)
+  - **Kanban Card Fixes**: Fixed width cards with text truncation/ellipsis on all fields
   - Added Settings page with default country selector, export/import, and database reset
   - Integrated 20 country codes for phone numbers
   - **Sales Lead Creation**: Sales users can now create leads directly in "My Leads"
@@ -19,6 +20,7 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
   - Implemented authentication system (admin/sales roles)
   - Integrated Koadi Technology branding (logo, favicon, colors)
   - Added light/dark mode toggle
+  - **Docker Support**: Added Dockerfile and .dockerignore for Coolify/Docker deployments
 
 ## Features
 
@@ -207,9 +209,20 @@ Uses Replit PostgreSQL environment variables:
 │   ├── index.php (Main CRM application - all features in single file)
 │   ├── logo.png (Koadi Technology logo)
 │   └── favicon.png (Koadi Technology favicon)
+├── Dockerfile (Docker deployment configuration)
+├── .dockerignore (Docker build exclusions)
 ├── .gitignore
 └── replit.md
 ```
+
+## Deployment
+
+### Docker/Coolify Deployment
+The CRM includes a Dockerfile for easy deployment to Docker, Coolify, or other container platforms:
+- Uses PHP 8.2 CLI with PostgreSQL extensions (pdo, pdo_pgsql)
+- Runs on port 5000 using PHP's built-in server
+- Configure PostgreSQL connection via environment variables:
+  - `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`
 
 ## Usage Instructions
 
