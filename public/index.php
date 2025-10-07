@@ -1406,7 +1406,7 @@ if (isset($_GET['background'])) {
         <div class="login-container">
           <div class="login-box">
             <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">CRM Login</h2>
+            <h2 style="margin-bottom: 24px;">Koadi Tech - CRM Login</h2>
             <form onsubmit="handleLogin(event)">
               <div class="form-group">
                 <input type="email" name="email" placeholder="Email" autocomplete="email" required>
@@ -1416,9 +1416,6 @@ if (isset($_GET['background'])) {
               </div>
               <button type="submit" class="btn" style="width: 100%;">Login</button>
             </form>
-            <p style="margin-top: 20px; color: var(--muted); font-size: 12px;">
-              Default: admin@koadi.tech / admin123
-            </p>
           </div>
         </div>
       `;
