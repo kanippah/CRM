@@ -4,11 +4,15 @@
 A comprehensive single-file CRM system built with PHP and PostgreSQL for managing contacts, leads, calls, projects, and settings. The system features role-based access control (Admin/Sales), contact management with duplicate detection, call tracking, project pipeline with Kanban visualization, data export/import, and light/dark mode theming.
 
 ## Recent Changes
-- **October 7, 2025**: Enhanced Authentication & User Invites
+- **October 7, 2025**: Enhanced Authentication & Secure User Invites
   - **Remember Me**: Auto-login with secure 30-day tokens
   - **Forgot Password**: Email-based password reset with 1-hour expiration
   - **Password Security**: Minimum password length increased to 8 characters
-  - **Email Invites**: Admin can send email invites when creating new users
+  - **Secure User Invites**: 
+    - Admin sends invite via "Send Invite" button (separate from Add User)
+    - Invite email contains setup link (48-hour expiration)
+    - User sets own name and password via setup link
+    - Admin never has access to user passwords
   - **SMTP Integration**: Email sending via help@koaditech.com (mail.koaditech.com:465)
   - **Background Image**: Fixed login page background with reduced opacity (15%)
   - **SSL Certificate**: Deployed to https://crm.koaditech.com with valid SSL
@@ -89,7 +93,12 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - Search functionality across name, phone, location, company
 
 ### User Management (Admin Only)
-- Create, edit, delete sales users
+- **Add User**: Manually create users with email, name, password, and role
+- **Send Invite**: Send secure invitation emails to new users
+  - User receives email with setup link (48-hour expiration)
+  - User sets their own name and password
+  - Admin never has access to user passwords
+- Edit and delete users
 - Manage user credentials and roles
 
 ### Authentication
@@ -113,6 +122,9 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 
 ### Password Resets Table
 - id, email, token (hashed), expires_at, created_at
+
+### Invitations Table
+- id, email, role, token (hashed), expires_at, created_at
 
 ### Contacts Table
 - id, type (Individual/Company), company, name, email
@@ -157,6 +169,10 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - `api=session` - Get current session
 - `api=login` - Login (POST)
 - `api=logout` - Logout (POST)
+- `api=forgot_password` - Request password reset (POST)
+- `api=reset_password` - Reset password with token (POST)
+- `api=send_invite` - Send user invitation (POST, Admin only)
+- `api=accept_invite` - Accept invitation and create account (POST)
 
 ### Dashboard
 - `api=stats` - Get dashboard statistics

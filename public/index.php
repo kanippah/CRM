@@ -239,6 +239,16 @@ function ensure_schema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_phone_unique ON contacts ((regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,'') ,'\\D','','g'))) WHERE COALESCE(phone_country,'')<>'' AND COALESCE(phone_number,'')<>'';
     CREATE INDEX IF NOT EXISTS idx_call_updates_call ON call_updates(call_id);
     
+    -- Create invitations table if it doesn't exist
+    CREATE TABLE IF NOT EXISTS invitations (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      role TEXT NOT NULL,
+      token TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    
     -- Add assigned_to columns if they don't exist
     DO $$ 
     BEGIN
@@ -285,6 +295,8 @@ if (isset($_GET['api'])) {
       case 'session': api_session(); break;
       case 'forgot_password': api_forgot_password(); break;
       case 'reset_password': api_reset_password(); break;
+      case 'send_invite': api_send_invite(); break;
+      case 'accept_invite': api_accept_invite(); break;
       
       case 'users.list': api_users_list(); break;
       case 'users.save': api_users_save(); break;
@@ -505,6 +517,103 @@ function api_reset_password() {
   respond(['error' => 'Invalid or expired reset token'], 400);
 }
 
+function api_send_invite() {
+  require_admin();
+  $b = body_json();
+  $email = trim($b['email'] ?? '');
+  $role = $b['role'] ?? 'sales';
+  
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['error' => 'Invalid email format'], 400);
+  }
+  
+  $pdo = db();
+  
+  // Check if email already exists
+  $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
+  $stmt->execute([':e' => $email]);
+  if ($stmt->fetch()) {
+    respond(['error' => 'User with this email already exists'], 400);
+  }
+  
+  // Generate invitation token
+  $token = bin2hex(random_bytes(32));
+  $expires_at = date('Y-m-d H:i:s', strtotime('+48 hours'));
+  
+  // Store invitation
+  $pdo->prepare("INSERT INTO invitations (email, role, token, expires_at) VALUES (:e, :r, :t, :exp)")
+    ->execute([':e' => $email, ':r' => $role, ':t' => password_hash($token, PASSWORD_DEFAULT), ':exp' => $expires_at]);
+  
+  // Send invite email
+  $setup_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/?invite_token=' . urlencode($token);
+  
+  $email_body = "
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+      <div style='background: linear-gradient(135deg, #FF8C42, #0066CC); padding: 30px; text-align: center;'>
+        <h1 style='color: white; margin: 0;'>You're Invited to Koadi Tech CRM</h1>
+      </div>
+      <div style='padding: 30px; background: #f9f9f9;'>
+        <p>Hello,</p>
+        <p>You've been invited to join Koadi Technology CRM platform as a <strong>{$role}</strong> user.</p>
+        <p>Click the button below to set up your account with your name and password:</p>
+        <div style='text-align: center; margin: 30px 0;'>
+          <a href='{$setup_url}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Set Up My Account</a>
+        </div>
+        <p style='color: #666; font-size: 14px;'>This invitation link will expire in 48 hours.</p>
+        <p style='color: #999; font-size: 12px; margin-top: 20px;'>If you didn't expect this invitation, you can safely ignore this email.</p>
+        <p style='margin-top: 30px; color: #999; font-size: 12px;'>This is an automated message from Koadi Technology CRM.</p>
+      </div>
+    </div>
+  ";
+  
+  if (send_email($email, 'Invitation to Join Koadi Tech CRM', $email_body)) {
+    respond(['ok' => true, 'message' => 'Invitation sent successfully']);
+  } else {
+    respond(['error' => 'Failed to send invitation email'], 500);
+  }
+}
+
+function api_accept_invite() {
+  $b = body_json();
+  $token = $b['token'] ?? '';
+  $full_name = trim($b['full_name'] ?? '');
+  $password = $b['password'] ?? '';
+  
+  if (!$full_name || !$password) {
+    respond(['error' => 'Full name and password are required'], 400);
+  }
+  
+  if (strlen($password) < 8) {
+    respond(['error' => 'Password must be at least 8 characters'], 400);
+  }
+  
+  $pdo = db();
+  $stmt = $pdo->query("SELECT * FROM invitations WHERE expires_at > NOW()");
+  $invites = $stmt->fetchAll();
+  
+  foreach ($invites as $invite) {
+    if (password_verify($token, $invite['token'])) {
+      // Create user account
+      $username = explode('@', $invite['email'])[0];
+      $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id");
+      $stmt->execute([
+        ':e' => $invite['email'],
+        ':u' => $username,
+        ':p' => password_hash($password, PASSWORD_DEFAULT),
+        ':n' => $full_name,
+        ':r' => $invite['role']
+      ]);
+      
+      // Delete the invitation
+      $pdo->prepare("DELETE FROM invitations WHERE email = :email")->execute([':email' => $invite['email']]);
+      
+      respond(['ok' => true, 'message' => 'Account created successfully! Please login.']);
+    }
+  }
+  
+  respond(['error' => 'Invalid or expired invitation'], 400);
+}
+
 function api_users_list() {
   require_admin();
   $pdo = db();
@@ -522,7 +631,6 @@ function api_users_save() {
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
-  $send_invite = $b['send_invite'] ?? false;
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
@@ -560,37 +668,6 @@ function api_users_save() {
     $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id, username, email, full_name, role");
     $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
     $user = $stmt->fetch();
-    
-    // Send invite email if requested
-    if ($send_invite) {
-      global $SMTP_HOST;
-      $login_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-      
-      $email_body = "
-        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-          <div style='background: linear-gradient(135deg, #FF8C42, #0066CC); padding: 30px; text-align: center;'>
-            <h1 style='color: white; margin: 0;'>Welcome to Koadi Tech CRM</h1>
-          </div>
-          <div style='padding: 30px; background: #f9f9f9;'>
-            <p>Hello {$full_name},</p>
-            <p>You've been invited to join Koadi Technology CRM platform as a <strong>{$role}</strong> user.</p>
-            <p><strong>Your login credentials:</strong></p>
-            <div style='background: white; padding: 20px; border-radius: 8px; margin: 20px 0;'>
-              <p style='margin: 5px 0;'><strong>Email:</strong> {$email}</p>
-              <p style='margin: 5px 0;'><strong>Password:</strong> {$password}</p>
-            </div>
-            <p style='color: #666; font-size: 14px;'>⚠️ Please change your password after your first login for security.</p>
-            <div style='text-align: center; margin: 30px 0;'>
-              <a href='{$login_url}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Login to CRM</a>
-            </div>
-            <p>If you have any questions, please contact your administrator.</p>
-            <p style='margin-top: 30px; color: #999; font-size: 12px;'>This is an automated message from Koadi Technology CRM.</p>
-          </div>
-        </div>
-      ";
-      
-      send_email($email, 'Welcome to Koadi Tech CRM - Your Account Details', $email_body);
-    }
   }
   
   respond(['item' => $user]);
@@ -1656,6 +1733,12 @@ if (isset($_GET['background'])) {
         return;
       }
       
+      const inviteToken = new URLSearchParams(window.location.search).get('invite_token');
+      if (inviteToken) {
+        renderAcceptInvite(inviteToken);
+        return;
+      }
+      
       document.getElementById('app').innerHTML = `
         <div class="login-container">
           <div class="login-box">
@@ -1788,6 +1871,58 @@ if (isset($_GET['background'])) {
           body: JSON.stringify({ token, password })
         });
         alert(result.message || 'Password reset successful! Please login with your new password.');
+        window.location.href = window.location.origin;
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    function renderAcceptInvite(token) {
+      document.getElementById('app').innerHTML = `
+        <div class="login-container">
+          <div class="login-box">
+            <img src="?logo" alt="Koadi Technology">
+            <h2 style="margin-bottom: 24px;">Set Up Your Account</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">Complete your account setup by entering your details below.</p>
+            <form onsubmit="handleAcceptInvite(event, '${token}')">
+              <div class="form-group">
+                <input type="text" name="full_name" placeholder="Full Name" required>
+              </div>
+              <div class="form-group">
+                <input type="password" name="password" placeholder="Password (min 8 characters)" required minlength="8">
+              </div>
+              <div class="form-group">
+                <input type="password" name="confirm_password" placeholder="Confirm Password" required minlength="8">
+              </div>
+              <button type="submit" class="btn" style="width: 100%;">Create Account</button>
+              <button type="button" class="btn secondary" onclick="window.location.href = window.location.origin;" style="width: 100%; margin-top: 12px;">Back to Login</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+    
+    async function handleAcceptInvite(e, token) {
+      e.preventDefault();
+      const form = e.target;
+      const password = form.password.value;
+      const confirmPassword = form.confirm_password.value;
+      
+      if (password !== confirmPassword) {
+        alert('Passwords do not match!');
+        return;
+      }
+      
+      try {
+        const result = await api('accept_invite', {
+          method: 'POST',
+          body: JSON.stringify({
+            token: token,
+            full_name: form.full_name.value,
+            password: password
+          })
+        });
+        alert(result.message || 'Account created successfully! Please login.');
         window.location.href = window.location.origin;
       } catch (e) {
         alert('Error: ' + e.message);
@@ -2228,6 +2363,7 @@ if (isset($_GET['background'])) {
       document.getElementById('view-users').innerHTML = `
         <div class="toolbar">
           <button class="btn" onclick="openUserForm()">+ Add User</button>
+          <button class="btn" onclick="openInviteForm()" style="background: var(--brand); margin-left: 8px;">Send Invite</button>
         </div>
         <div class="card">
           <h2>Users</h2>
@@ -2301,14 +2437,6 @@ if (isset($_GET['background'])) {
               <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
           </div>
-          ${!user ? `
-          <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" name="send_invite" checked style="width: auto;">
-              <span>Send email invite to user</span>
-            </label>
-          </div>
-          ` : ''}
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
         </form>
@@ -2332,8 +2460,7 @@ if (isset($_GET['background'])) {
         email: email,
         full_name: form.full_name.value,
         password: form.password.value,
-        role: form.role.value,
-        send_invite: form.send_invite?.checked || false
+        role: form.role.value
       };
       
       try {
@@ -2343,9 +2470,6 @@ if (isset($_GET['background'])) {
         });
         closeModal();
         await loadUsers();
-        if (data.send_invite) {
-          alert('User created and invite email sent!');
-        }
       } catch (e) {
         alert('Error: ' + e.message);
       }
@@ -2356,6 +2480,54 @@ if (isset($_GET['background'])) {
       try {
         await api(`users.delete&id=${id}`, { method: 'DELETE' });
         await loadUsers();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    function openInviteForm() {
+      showModal(`
+        <h3>Send User Invitation</h3>
+        <p style="color: var(--muted); margin-bottom: 20px;">Send an invitation link to a user's email. They will set up their own account with name and password.</p>
+        <form onsubmit="sendInvite(event)">
+          <div class="form-group">
+            <label>Email *</label>
+            <input type="email" name="email" placeholder="user@example.com" required>
+          </div>
+          <div class="form-group">
+            <label>Role *</label>
+            <select name="role" required>
+              <option value="sales">Sales</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button type="submit" class="btn">Send Invitation</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function sendInvite(e) {
+      e.preventDefault();
+      const form = e.target;
+      
+      const email = form.email.value.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        return;
+      }
+      
+      try {
+        const result = await api('send_invite', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: email,
+            role: form.role.value
+          })
+        });
+        alert(result.message || 'Invitation sent successfully!');
+        closeModal();
       } catch (e) {
         alert('Error: ' + e.message);
       }
