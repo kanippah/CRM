@@ -3,9 +3,9 @@ session_start();
 
 $DB_HOST = getenv('PGHOST') ?: '127.0.0.1';
 $DB_PORT = getenv('PGPORT') ?: '5432';
-$DB_NAME = getenv('PGDATABASE') ?: 'postgres';
-$DB_USER = getenv('PGUSER') ?: 'postgres';
-$DB_PASS = getenv('PGPASSWORD') ?: '';
+$DB_NAME = getenv('PGDATABASE') ?: 'crmdb';
+$DB_USER = getenv('PGUSER') ?: 'crmuser';
+$DB_PASS = getenv('PGPASSWORD') ?: 'crmStongpassword';
 
 header_remove('X-Powered-By');
 
