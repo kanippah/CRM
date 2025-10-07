@@ -1488,6 +1488,7 @@ if (isset($_GET['background'])) {
       background: var(--bg);
       color: var(--text);
       transition: background 0.3s, color 0.3s;
+      font-size: 80%;
     }
     
     .app { display: flex; height: 100vh; }
