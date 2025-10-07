@@ -1181,11 +1181,20 @@ function api_calls_list() {
   $p = db();
   $q = $_GET['q'] ?? '';
   
+  $sql = "SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user, 
+          (SELECT cu.notes FROM call_updates cu WHERE cu.call_id = c.id ORDER BY cu.created_at DESC LIMIT 1) as latest_update
+          FROM calls c 
+          LEFT JOIN contacts co ON co.id=c.contact_id 
+          LEFT JOIN users u ON c.assigned_to = u.id";
+  
   if ($q !== '') {
-    $s = $p->prepare("SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id WHERE (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q) ORDER BY c.id DESC");
+    $sql .= " WHERE (co.name ILIKE :q OR co.company ILIKE :q OR c.notes ILIKE :q OR c.outcome ILIKE :q)";
+    $sql .= " ORDER BY c.id DESC";
+    $s = $p->prepare($sql);
     $s->execute([':q' => '%' . $q . '%']);
   } else {
-    $s = $p->query("SELECT c.*, co.name AS contact_name, co.company AS contact_company, u.full_name as assigned_user FROM calls c LEFT JOIN contacts co ON co.id=c.contact_id LEFT JOIN users u ON c.assigned_to = u.id ORDER BY c.id DESC");
+    $sql .= " ORDER BY c.id DESC";
+    $s = $p->query($sql);
   }
   respond(['items' => $s->fetchAll()]);
 }
@@ -3197,24 +3206,36 @@ if (isset($_GET['background'])) {
       const q = document.getElementById('callSearch')?.value || '';
       const data = await api(`calls.list&q=${encodeURIComponent(q)}`);
       const tbody = document.querySelector('#callsTable tbody');
-      tbody.innerHTML = data.items.map(c => `
-        <tr>
-          <td>
-            <a href="#" onclick="viewCallUpdates(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">
-              ${c.contact_name || c.contact_company || 'N/A'}
-            </a>
-          </td>
-          <td>${new Date(c.when_at).toLocaleString()}</td>
-          <td><span class="badge">${c.outcome}</span></td>
-          <td>${c.duration_min || 0}</td>
-          <td>${c.notes || '-'}</td>
-          <td>
-            <button class="btn" onclick="addCallUpdate(${c.id})">Add Update</button>
-            <button class="btn" onclick="openCallForm(${c.id})">Edit</button>
-            <button class="btn danger" onclick="deleteCall(${c.id})">Delete</button>
-          </td>
-        </tr>
-      `).join('');
+      const isAdmin = currentUser.role === 'admin';
+      
+      tbody.innerHTML = data.items.map(c => {
+        const latestNote = c.latest_update || c.notes || '-';
+        const truncatedNote = latestNote.length > 50 ? latestNote.substring(0, 50) + '...' : latestNote;
+        const noteDisplay = latestNote.length > 50 
+          ? `<span title="${latestNote.replace(/"/g, '&quot;')}">${truncatedNote}</span>`
+          : latestNote;
+        
+        const deleteBtn = isAdmin ? `<button class="btn danger" onclick="deleteCall(${c.id})">Delete</button>` : '';
+        
+        return `
+          <tr>
+            <td>
+              <a href="#" onclick="viewCallUpdates(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">
+                ${c.contact_name || c.contact_company || 'N/A'}
+              </a>
+            </td>
+            <td>${new Date(c.when_at).toLocaleString()}</td>
+            <td><span class="badge">${c.outcome}</span></td>
+            <td>${c.duration_min || 0}</td>
+            <td>${noteDisplay}</td>
+            <td>
+              <button class="btn" onclick="addCallUpdate(${c.id})">Add Update</button>
+              <button class="btn" onclick="openCallForm(${c.id})">Edit</button>
+              ${deleteBtn}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
     
     function openCallFormForContact(contactId) {
