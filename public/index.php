@@ -1016,6 +1016,7 @@ function api_industries_save() {
   require_admin();
   $pdo = db();
   $b = body_json();
+  $id = $b['id'] ?? null;
   $name = trim($b['name'] ?? '');
   
   if (empty($name)) {
@@ -1023,11 +1024,17 @@ function api_industries_save() {
   }
   
   try {
-    $stmt = $pdo->prepare("INSERT INTO industries (name) VALUES (:name) RETURNING *");
-    $stmt->execute([':name' => $name]);
-    respond(['item' => $stmt->fetch()]);
+    if ($id) {
+      $stmt = $pdo->prepare("UPDATE industries SET name = :name WHERE id = :id RETURNING *");
+      $stmt->execute([':name' => $name, ':id' => $id]);
+      respond(['item' => $stmt->fetch()]);
+    } else {
+      $stmt = $pdo->prepare("INSERT INTO industries (name) VALUES (:name) RETURNING *");
+      $stmt->execute([':name' => $name]);
+      respond(['item' => $stmt->fetch()]);
+    }
   } catch (PDOException $e) {
-    respond(['error' => 'Industry already exists'], 400);
+    respond(['error' => 'Industry name already exists'], 400);
   }
 }
 
@@ -3639,6 +3646,7 @@ if (isset($_GET['background'])) {
               <tr>
                 <td>${i.name}</td>
                 <td>
+                  <button class="btn" onclick="openEditIndustryForm(${i.id}, '${i.name.replace(/'/g, "\\'")}')">Edit</button>
                   <button class="btn danger" onclick="deleteIndustry(${i.id})">Delete</button>
                 </td>
               </tr>
@@ -3654,7 +3662,7 @@ if (isset($_GET['background'])) {
     function openAddIndustryForm() {
       showModal(`
         <h3>Add New Industry</h3>
-        <form onsubmit="saveIndustry(event)">
+        <form onsubmit="saveIndustry(event, null)">
           <div class="form-group">
             <label>Industry Name *</label>
             <input type="text" name="name" required placeholder="e.g., Real Estate">
@@ -3665,7 +3673,21 @@ if (isset($_GET['background'])) {
       `);
     }
     
-    async function saveIndustry(e) {
+    function openEditIndustryForm(id, currentName) {
+      showModal(`
+        <h3>Edit Industry</h3>
+        <form onsubmit="saveIndustry(event, ${id})">
+          <div class="form-group">
+            <label>Industry Name *</label>
+            <input type="text" name="name" value="${currentName}" required>
+          </div>
+          <button type="submit" class="btn">Save Changes</button>
+          <button type="button" class="btn secondary" onclick="closeModal(); openIndustriesManagement();">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveIndustry(e, id) {
       e.preventDefault();
       const form = e.target;
       const name = form.name.value.trim();
@@ -3678,7 +3700,7 @@ if (isset($_GET['background'])) {
       try {
         await api('industries.save', {
           method: 'POST',
-          body: JSON.stringify({ name })
+          body: JSON.stringify({ id, name })
         });
         closeModal();
         openIndustriesManagement();
