@@ -3566,6 +3566,10 @@ if (isset($_GET['background'])) {
         </div>
         ${isAdmin ? `
         <div class="card" style="margin-top: 16px;">
+          <h3>Manage Industries</h3>
+          <button class="btn" onclick="openIndustriesManagement()">Manage Industries</button>
+        </div>
+        <div class="card" style="margin-top: 16px;">
           <h3>Export / Import</h3>
           <button class="btn" onclick="exportData()">⬇️ Export JSON</button>
           <button class="btn warning" onclick="document.getElementById('importFile').click()">⬆️ Import JSON</button>
@@ -3613,6 +3617,85 @@ if (isset($_GET['background'])) {
       await api('reset', { method: 'POST' });
       alert('Database reset complete');
       renderSettings();
+    }
+    
+    async function openIndustriesManagement() {
+      const industries = await api('industries.list');
+      
+      showModal(`
+        <h3>Manage Industries</h3>
+        <div class="form-group">
+          <button class="btn" onclick="openAddIndustryForm()" style="margin-bottom: 16px;">+ Add New Industry</button>
+        </div>
+        <table style="width: 100%;">
+          <thead>
+            <tr>
+              <th>Industry Name</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="industriesTableBody">
+            ${industries.items.map(i => `
+              <tr>
+                <td>${i.name}</td>
+                <td>
+                  <button class="btn danger" onclick="deleteIndustry(${i.id})">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top: 20px;">
+          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+        </div>
+      `);
+    }
+    
+    function openAddIndustryForm() {
+      showModal(`
+        <h3>Add New Industry</h3>
+        <form onsubmit="saveIndustry(event)">
+          <div class="form-group">
+            <label>Industry Name *</label>
+            <input type="text" name="name" required placeholder="e.g., Real Estate">
+          </div>
+          <button type="submit" class="btn">Add Industry</button>
+          <button type="button" class="btn secondary" onclick="closeModal(); openIndustriesManagement();">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveIndustry(e) {
+      e.preventDefault();
+      const form = e.target;
+      const name = form.name.value.trim();
+      
+      if (!name) {
+        alert('Industry name is required');
+        return;
+      }
+      
+      try {
+        await api('industries.save', {
+          method: 'POST',
+          body: JSON.stringify({ name })
+        });
+        closeModal();
+        openIndustriesManagement();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function deleteIndustry(id) {
+      if (!confirm('Delete this industry? This will not affect existing contacts/leads using this industry.')) return;
+      
+      try {
+        await api(`industries.delete&id=${id}`, { method: 'DELETE' });
+        openIndustriesManagement();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
     
     checkSession();
