@@ -78,8 +78,12 @@ function send_email($to, $subject, $message) {
   error_log("SMTP: Server greeting: " . trim($response));
   
   fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
-  $response = fgets($socket, 515);
-  error_log("SMTP: EHLO response: " . trim($response));
+  
+  // Read all EHLO responses until we get one without a dash
+  do {
+    $response = fgets($socket, 515);
+    error_log("SMTP: EHLO response: " . trim($response));
+  } while (preg_match('/^250-/', $response));
   
   fputs($socket, "AUTH LOGIN\r\n");
   $response = fgets($socket, 515);
