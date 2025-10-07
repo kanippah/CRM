@@ -871,7 +871,7 @@ if (isset($_GET['favicon'])) {
 
 if (isset($_GET['background'])) {
   header('Content-Type: image/jpeg');
-  readfile('../attached_assets/stock_images/professional_modern__2458abbf.jpg');
+  readfile('background.jpg');
   exit;
 }
 ?>
@@ -1118,7 +1118,7 @@ if (isset($_GET['background'])) {
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, rgba(0, 102, 204, 0.85), rgba(0, 51, 102, 0.85)), url('?background') center/cover no-repeat;
+      background: linear-gradient(135deg, rgba(0, 102, 204, 0.4), rgba(0, 51, 102, 0.4)), url('?background') center/cover no-repeat;
     }
     
     .login-box {
