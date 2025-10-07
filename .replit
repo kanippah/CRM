@@ -1,4 +1,4 @@
-modules = ["php-8.4"]
+modules = ["php-8.4", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -33,3 +33,6 @@ externalPort = 80
 [[ports]]
 localPort = 41219
 externalPort = 3000
+
+[nix]
+channel = "stable-25_05"
