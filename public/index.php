@@ -1173,15 +1173,19 @@ function api_contacts_return_to_lead() {
   $id = (int)($b['id'] ?? 0);
   $user_id = $_SESSION['user_id'];
   
+  error_log("Return to lead - ID: $id, User: $user_id");
+  
   $stmt = $p->prepare("SELECT * FROM contacts WHERE id=:id");
   $stmt->execute([':id' => $id]);
   $contact = $stmt->fetch();
   
   if (!$contact) {
+    error_log("Return to lead - Contact not found: $id");
     respond(['error' => 'Contact not found'], 404);
   }
   
   if ($_SESSION['role'] !== 'admin' && $contact['assigned_to'] && $contact['assigned_to'] != $user_id) {
+    error_log("Return to lead - Permission denied for user $user_id on contact $id");
     respond(['error' => 'Forbidden'], 403);
   }
   
@@ -1191,12 +1195,16 @@ function api_contacts_return_to_lead() {
   $company = trim($contact['company'] ?? '');
   $industry = trim($contact['industry'] ?? '');
   
+  error_log("Return to lead - Creating lead: $name");
+  
   $stmt = $p->prepare("INSERT INTO leads (name, phone, email, company, industry, status, assigned_to) VALUES (:n, :p, :e, :c, :i, 'assigned', :a) RETURNING *");
   $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':i' => $industry, ':a' => $user_id]);
   $lead = $stmt->fetch();
   
+  error_log("Return to lead - Deleting contact: $id");
   $p->prepare("DELETE FROM contacts WHERE id=:id")->execute([':id' => $id]);
   
+  error_log("Return to lead - Success, new lead ID: " . $lead['id']);
   respond(['item' => $lead]);
 }
 
@@ -3307,14 +3315,17 @@ if (isset($_GET['background'])) {
     async function returnContactToLead(id) {
       if (!confirm('Return this contact to leads? This will move the contact back to the leads pool.')) return;
       try {
-        await api('contacts.returnToLead', {
+        console.log('Attempting to return contact to lead, ID:', id);
+        const response = await api('contacts.returnToLead', {
           method: 'POST',
           body: JSON.stringify({ id })
         });
+        console.log('Return to lead response:', response);
         alert('Contact successfully returned to leads!');
         await loadContacts();
         switchView('leads');
       } catch (e) {
+        console.error('Return to lead error:', e);
         alert('Error: ' + e.message);
       }
     }
