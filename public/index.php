@@ -892,10 +892,11 @@ function api_leads_import() {
     $email = trim($l['email'] ?? '');
     $company = trim($l['company'] ?? '');
     $address = trim($l['address'] ?? '');
+    $industry = trim($l['industry'] ?? '');
     
     if ($name) {
-      $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status) VALUES (:n, :p, :e, :c, :a, 'global')")
-        ->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address]);
+      $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, industry, status) VALUES (:n, :p, :e, :c, :a, :i, 'global')")
+        ->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry]);
       $count++;
     }
   }
@@ -943,12 +944,16 @@ function api_leads_convert() {
   $type = !empty($company) ? 'Company' : 'Individual';
   $now = date('c');
   
-  $s = $pdo->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u) RETURNING *");
-  $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $phoneCountry, ':pn' => $phoneNumber, ':s' => $source, ':no' => $notes, ':c' => $now, ':u' => $now]);
+  $industry = trim($lead['industry'] ?? '');
+  
+  $s = $pdo->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,industry,created_at,updated_at,assigned_to) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:i,:c,:u,:a) RETURNING *");
+  $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $phoneCountry, ':pn' => $phoneNumber, ':s' => $source, ':no' => $notes, ':i' => $industry, ':c' => $now, ':u' => $now, ':a' => $user_id]);
   $contact = $s->fetch();
   
   $pdo->prepare("INSERT INTO interactions (lead_id, user_id, type, notes) VALUES (:lid, :uid, 'note', 'Lead converted to contact')")
     ->execute([':lid' => $id, ':uid' => $user_id]);
+  
+  $pdo->prepare("DELETE FROM leads WHERE id=:id")->execute([':id' => $id]);
   
   respond(['item' => $contact]);
 }
