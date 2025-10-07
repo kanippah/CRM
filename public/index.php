@@ -763,39 +763,60 @@ function api_leads_list() {
   $pdo = db();
   $q = $_GET['q'] ?? '';
   $type = $_GET['type'] ?? 'all';
+  $industry = $_GET['industry'] ?? '';
+  $page = max(1, (int)($_GET['page'] ?? 1));
+  $limit = max(1, min(100, (int)($_GET['limit'] ?? 20)));
+  $offset = ($page - 1) * $limit;
   
   $user_id = $_SESSION['user_id'];
   $role = $_SESSION['role'];
   
+  $where_parts = [];
+  $params = [];
+  
   if ($role === 'admin') {
-    if ($q) {
-      $stmt = $pdo->prepare("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE (l.name ILIKE :q OR l.phone ILIKE :q OR l.address ILIKE :q OR l.company ILIKE :q) ORDER BY l.id DESC");
-      $stmt->execute([':q' => "%$q%"]);
-    } else {
-      if ($type === 'global') {
-        $stmt = $pdo->query("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE l.status='global' ORDER BY l.id DESC");
-      } elseif ($type === 'assigned') {
-        $stmt = $pdo->query("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE l.status='assigned' ORDER BY l.id DESC");
-      } else {
-        $stmt = $pdo->query("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id ORDER BY l.id DESC");
-      }
+    if ($type === 'global') {
+      $where_parts[] = "l.status='global'";
+    } elseif ($type === 'assigned') {
+      $where_parts[] = "l.status='assigned'";
     }
   } else {
-    if ($q) {
-      $stmt = $pdo->prepare("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE (l.status='global' OR l.assigned_to=:uid) AND (l.name ILIKE :q OR l.phone ILIKE :q OR l.address ILIKE :q OR l.company ILIKE :q) ORDER BY l.id DESC");
-      $stmt->execute([':uid' => $user_id, ':q' => "%$q%"]);
+    if ($type === 'global') {
+      $where_parts[] = "l.status='global'";
+    } elseif ($type === 'personal') {
+      $where_parts[] = "l.assigned_to=:uid";
+      $params[':uid'] = $user_id;
     } else {
-      if ($type === 'global') {
-        $stmt = $pdo->query("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE l.status='global' ORDER BY l.id DESC");
-      } elseif ($type === 'personal') {
-        $stmt = $pdo->prepare("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE l.assigned_to=:uid ORDER BY l.id DESC");
-        $stmt->execute([':uid' => $user_id]);
-      } else {
-        $stmt = $pdo->prepare("SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id WHERE (l.status='global' OR l.assigned_to=:uid) ORDER BY l.id DESC");
-        $stmt->execute([':uid' => $user_id]);
-      }
+      $where_parts[] = "(l.status='global' OR l.assigned_to=:uid)";
+      $params[':uid'] = $user_id;
     }
   }
+  
+  if ($q) {
+    $where_parts[] = "(l.name ILIKE :q OR l.phone ILIKE :q OR l.address ILIKE :q OR l.company ILIKE :q)";
+    $params[':q'] = "%$q%";
+  }
+  
+  if ($industry) {
+    $where_parts[] = "l.industry = :industry";
+    $params[':industry'] = $industry;
+  }
+  
+  $where_sql = count($where_parts) > 0 ? 'WHERE ' . implode(' AND ', $where_parts) : '';
+  
+  $count_sql = "SELECT COUNT(*) FROM leads l $where_sql";
+  $stmt = $pdo->prepare($count_sql);
+  $stmt->execute($params);
+  $total_count = (int)$stmt->fetchColumn();
+  
+  $sql = "SELECT l.*, u.full_name as assigned_name FROM leads l LEFT JOIN users u ON l.assigned_to = u.id $where_sql ORDER BY l.id DESC LIMIT :limit OFFSET :offset";
+  $stmt = $pdo->prepare($sql);
+  foreach ($params as $key => $value) {
+    $stmt->bindValue($key, $value);
+  }
+  $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+  $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+  $stmt->execute();
   
   $leads = $stmt->fetchAll();
   
@@ -809,7 +830,9 @@ function api_leads_list() {
     }
   }
   
-  respond(['items' => $leads]);
+  $total_pages = ceil($total_count / $limit);
+  
+  respond(['items' => $leads, 'total_count' => $total_count, 'total_pages' => $total_pages, 'current_page' => $page]);
 }
 
 function api_leads_save() {
@@ -1920,6 +1943,9 @@ if (isset($_GET['background'])) {
     let currentUser = null;
     let currentView = 'leads';
     let currentLeadTab = 'global';
+    let currentLeadPage = 1;
+    let leadsPerPage = 20;
+    let currentLeadIndustry = '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
     
@@ -2258,10 +2284,17 @@ if (isset($_GET['background'])) {
         `;
       }
       
+      const industries = await api('industries.list');
+      const industryOptions = industries.items.map(i => `<option value="${i.name}" ${currentLeadIndustry === i.name ? 'selected' : ''}>${i.name}</option>`).join('');
+      
       document.getElementById('view-leads').innerHTML = `
         <div class="toolbar">
           <button class="btn" onclick="openLeadForm()">+ Add Lead</button>
           ${isAdmin ? '<button class="btn warning" onclick="openImportModal()">📥 Import Leads</button>' : ''}
+          <select id="industryFilter" onchange="filterLeadsByIndustry()" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--text); margin-right: 10px;">
+            <option value="">All Industries</option>
+            ${industryOptions}
+          </select>
           <input type="text" class="search" id="leadSearch" placeholder="Search by name, phone, address, company..." oninput="loadLeads()">
         </div>
         ${tabs}
@@ -2282,6 +2315,7 @@ if (isset($_GET['background'])) {
             </thead>
             <tbody></tbody>
           </table>
+          <div id="leadsPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px;"></div>
         </div>
       `;
       
@@ -2290,16 +2324,30 @@ if (isset($_GET['background'])) {
     
     function switchLeadTab(tab) {
       currentLeadTab = tab;
+      currentLeadPage = 1;
       renderLeads();
+    }
+    
+    function filterLeadsByIndustry() {
+      currentLeadIndustry = document.getElementById('industryFilter')?.value || '';
+      currentLeadPage = 1;
+      loadLeads();
+    }
+    
+    function changeLeadPage(page) {
+      currentLeadPage = page;
+      loadLeads();
     }
     
     async function loadLeads() {
       const search = document.getElementById('leadSearch')?.value || '';
-      const data = await api(`leads.list&q=${encodeURIComponent(search)}&type=${currentLeadTab}`);
+      const data = await api(`leads.list&q=${encodeURIComponent(search)}&type=${currentLeadTab}&industry=${encodeURIComponent(currentLeadIndustry)}&page=${currentLeadPage}&limit=${leadsPerPage}`);
       const tbody = document.querySelector('#leadsTable tbody');
+      const pagination = document.getElementById('leadsPagination');
       
       if (data.items.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted);">No leads found</td></tr>';
+        pagination.innerHTML = '';
         return;
       }
       
@@ -2329,6 +2377,48 @@ if (isset($_GET['background'])) {
           </tr>
         `;
       }).join('');
+      
+      const totalPages = data.total_pages || 1;
+      const totalCount = data.total_count || 0;
+      
+      let paginationHTML = `<div style="color: var(--muted); margin-right: 15px;">Showing ${data.items.length} of ${totalCount} leads</div>`;
+      
+      if (totalPages > 1) {
+        paginationHTML += '<div style="display: flex; gap: 5px;">';
+        
+        if (currentLeadPage > 1) {
+          paginationHTML += `<button class="btn" onclick="changeLeadPage(${currentLeadPage - 1})">« Prev</button>`;
+        }
+        
+        const startPage = Math.max(1, currentLeadPage - 2);
+        const endPage = Math.min(totalPages, currentLeadPage + 2);
+        
+        if (startPage > 1) {
+          paginationHTML += `<button class="btn" onclick="changeLeadPage(1)">1</button>`;
+          if (startPage > 2) paginationHTML += '<span style="padding: 8px;">...</span>';
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+          if (i === currentLeadPage) {
+            paginationHTML += `<button class="btn" style="background: var(--brand); color: white;">${i}</button>`;
+          } else {
+            paginationHTML += `<button class="btn" onclick="changeLeadPage(${i})">${i}</button>`;
+          }
+        }
+        
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) paginationHTML += '<span style="padding: 8px;">...</span>';
+          paginationHTML += `<button class="btn" onclick="changeLeadPage(${totalPages})">${totalPages}</button>`;
+        }
+        
+        if (currentLeadPage < totalPages) {
+          paginationHTML += `<button class="btn" onclick="changeLeadPage(${currentLeadPage + 1})">Next »</button>`;
+        }
+        
+        paginationHTML += '</div>';
+      }
+      
+      pagination.innerHTML = paginationHTML;
     }
     
     async function grabLead(id) {
