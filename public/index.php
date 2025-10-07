@@ -1255,7 +1255,7 @@ if (isset($_GET['background'])) {
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, rgba(0, 102, 204, 0.4), rgba(0, 51, 102, 0.4)), url('?background') center/cover no-repeat;
+      background: linear-gradient(135deg, rgba(0, 102, 204, 0.15), rgba(0, 51, 102, 0.15)), url('?background') center/cover no-repeat;
     }
     
     .login-box {
@@ -1566,9 +1566,6 @@ if (isset($_GET['background'])) {
               </div>
               <button type="submit" class="btn" style="width: 100%;">Login</button>
             </form>
-            <p style="margin-top: 20px; color: var(--muted); font-size: 12px;">
-              Default: admin@koadi.tech / admin123
-            </p>
           </div>
         </div>
       `;
