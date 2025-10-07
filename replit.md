@@ -4,6 +4,14 @@
 A comprehensive single-file CRM system built with PHP and PostgreSQL for managing contacts, leads, calls, projects, and settings. The system features role-based access control (Admin/Sales), contact management with duplicate detection, call tracking, project pipeline with Kanban visualization, data export/import, and light/dark mode theming.
 
 ## Recent Changes
+- **October 7, 2025**: Lead to Contact Conversion & Enhanced Authentication
+  - **Convert to Contact**: One-click button to convert leads to contacts automatically
+  - Automatically creates contact with all lead information (name, phone, email, company)
+  - Sets source as "Lead Conversion" for tracking
+  - Adds interaction note to lead history
+  - Intelligently parses phone numbers into country code and number
+  - Auto-detects contact type (Company vs Individual) based on data
+  
 - **October 7, 2025**: Enhanced Authentication & Secure User Invites
   - **Remember Me**: Auto-login with secure 30-day tokens
   - **Forgot Password**: Email-based password reset with 1-hour expiration
@@ -88,6 +96,11 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
   - New leads created by sales are automatically assigned to them
   - Leads are private and only visible to the creating user
   - Admin-created leads go to global pool
+- **Convert to Contact**: One-click conversion from lead to contact
+  - Automatically creates contact with all lead data
+  - Preserves phone, email, company, address information
+  - Sets source as "Lead Conversion" for tracking
+  - Adds conversion note to lead interaction history
 - CSV Import for bulk lead upload (Admin only)
 - Interaction history tracking
 - Search functionality across name, phone, location, company
@@ -211,6 +224,7 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - `api=leads.delete&id=X` - Delete lead (DELETE)
 - `api=leads.grab` - Grab lead (POST)
 - `api=leads.import` - Import leads CSV (POST, Admin)
+- `api=leads.convert` - Convert lead to contact (POST)
 - `api=interactions.list&lead_id=X` - List interactions
 - `api=interactions.save` - Save interaction (POST)
 - `api=users.list` - List users (Admin)

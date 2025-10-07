@@ -307,6 +307,7 @@ if (isset($_GET['api'])) {
       case 'leads.delete': api_leads_delete(); break;
       case 'leads.grab': api_leads_grab(); break;
       case 'leads.import': api_leads_import(); break;
+      case 'leads.convert': api_leads_convert(); break;
       
       case 'interactions.list': api_interactions_list(); break;
       case 'interactions.save': api_interactions_save(); break;
@@ -827,6 +828,56 @@ function api_leads_import() {
   }
   
   respond(['imported' => $count]);
+}
+
+function api_leads_convert() {
+  require_auth();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $user_id = $_SESSION['user_id'];
+  
+  $pdo = db();
+  
+  $stmt = $pdo->prepare("SELECT * FROM leads WHERE id=:id");
+  $stmt->execute([':id' => $id]);
+  $lead = $stmt->fetch();
+  
+  if (!$lead) {
+    respond(['error' => 'Lead not found'], 404);
+  }
+  
+  if ($_SESSION['role'] !== 'admin' && $lead['assigned_to'] != $user_id) {
+    respond(['error' => 'Forbidden'], 403);
+  }
+  
+  $phoneCountry = '';
+  $phoneNumber = '';
+  if (!empty($lead['phone'])) {
+    $phone = trim($lead['phone']);
+    if (preg_match('/^\+(\d+)\s*(.*)$/', $phone, $matches)) {
+      $phoneCountry = '+' . $matches[1];
+      $phoneNumber = trim($matches[2]);
+    } else {
+      $phoneNumber = $phone;
+    }
+  }
+  
+  $company = trim($lead['company'] ?? '');
+  $name = trim($lead['name'] ?? '');
+  $email = trim($lead['email'] ?? '');
+  $notes = 'Converted from lead';
+  $source = 'Lead Conversion';
+  $type = !empty($company) ? 'Company' : 'Individual';
+  $now = date('c');
+  
+  $s = $pdo->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u) RETURNING *");
+  $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $phoneCountry, ':pn' => $phoneNumber, ':s' => $source, ':no' => $notes, ':c' => $now, ':u' => $now]);
+  $contact = $s->fetch();
+  
+  $pdo->prepare("INSERT INTO interactions (lead_id, user_id, type, notes) VALUES (:lid, :uid, 'note', 'Lead converted to contact')")
+    ->execute([':lid' => $id, ':uid' => $user_id]);
+  
+  respond(['item' => $contact]);
 }
 
 function api_interactions_list() {
@@ -2100,6 +2151,7 @@ if (isset($_GET['background'])) {
             <td>
               ${canGrab ? `<button class="btn success" onclick="grabLead(${lead.id})">Grab</button>` : ''}
               ${canView && !isHidden ? `<button class="btn secondary" onclick="viewLead(${lead.id})">View</button>` : ''}
+              ${canView && !isHidden ? `<button class="btn" style="background: #FF8C42;" onclick="convertLeadToContact(${lead.id})">Convert to Contact</button>` : ''}
               ${currentUser.role === 'admin' ? `<button class="btn" onclick="openLeadForm(${lead.id})">Edit</button>` : ''}
               ${currentUser.role === 'admin' ? `<button class="btn" onclick="openAssignModal(${lead.id})">Assign</button>` : ''}
               ${currentUser.role === 'admin' ? `<button class="btn danger" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
@@ -2118,6 +2170,21 @@ if (isset($_GET['background'])) {
         });
         alert('Lead grabbed successfully!');
         await loadLeads();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function convertLeadToContact(id) {
+      if (!confirm('Convert this lead to a contact? This will create a new contact with all the lead information.')) return;
+      try {
+        const result = await api('leads.convert', {
+          method: 'POST',
+          body: JSON.stringify({ id })
+        });
+        alert('Lead converted to contact successfully!');
+        await loadLeads();
+        switchPage('contacts');
       } catch (e) {
         alert('Error: ' + e.message);
       }
