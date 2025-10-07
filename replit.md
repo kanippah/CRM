@@ -18,14 +18,15 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 
 **Technical Implementations:**
 - **Authentication:** Email-based authentication with role-based access (Admin/Sales), "Remember Me" functionality (30-day tokens), and a secure "Forgot Password" flow (1-hour token expiration). Minimum password length is 8 characters.
-- **User Management:** Secure user invitation system where users set their own passwords, and admin never has direct access to them. Features include user deactivation/activation without deletion.
-- **Contact Management:** Includes duplicate detection based on normalized phone numbers and case-insensitive company names. Supports contact types (Individual/Company).
+- **User Management:** Secure user invitation system where users set their own passwords, and admin never has direct access to them. Features include user deactivation/activation without deletion. Admin can delete pending invitations that haven't been accepted.
+- **Contact Management:** Includes duplicate detection based on normalized phone numbers and case-insensitive company names. Supports contact types (Individual/Company). Admin view includes "Assigned To" column showing contact ownership, reassignment capability, and clickable contact names for detailed view (includes call history and projects). Industry field allows categorization with custom industry management.
 - **Call Tracking:** Allows logging calls with outcomes, duration, and associated contacts. Features call updates for chronological note-taking.
 - **Project Pipeline:** Visual Kanban board with 5 stages (Lead, Qualified, Proposal, Negotiation, Won) supporting drag-and-drop stage updates.
-- **Lead Management:** Supports both global (admin-created) and personal (sales user-created/grabbed) leads. Features one-click lead-to-contact conversion with automatic data parsing and source tracking.
-- **Settings:** Admin-only section for setting default country codes, data export/import (JSON), and database reset functionality.
-- **Database Schema:** Utilizes PostgreSQL with specific tables for Users, Password Resets, Invitations, Contacts, Calls, Call Updates, Projects, Settings, Leads, and Interactions. Tables include necessary indexes for performance.
-- **API Endpoints:** A comprehensive set of API endpoints for all CRUD operations and specific functionalities like authentication, session management, lead conversion, and project stage updates.
+- **Lead Management:** Supports both global (admin-created) and personal (sales user-created/grabbed) leads. Features one-click lead-to-contact conversion with automatic data parsing and source tracking. Admin view includes industry column, clickable lead names for detailed interaction view, and all lead actions (Edit/Assign/Delete) accessible through view modal. Sales users can convert leads to contacts, while admins manage lead assignment.
+- **Industry Management:** Admin-only industry management system with 16 default categories (Technology, Healthcare, Finance, Manufacturing, Retail, Education, Real Estate, Construction, Transportation, Hospitality, Media, Legal, Insurance, Energy, Agriculture, Non-Profit). Admins can add custom industries and delete unused ones. Industries can be assigned to both leads and contacts.
+- **Settings:** Admin-only section for setting default country codes, managing industries, data export/import (JSON with leads and industry data), and database reset functionality.
+- **Database Schema:** Utilizes PostgreSQL with specific tables for Users, Password Resets, Invitations, Contacts, Calls, Call Updates, Projects, Settings, Leads, Industries, and Interactions. Tables include necessary indexes for performance. Auto-migration system ensures schema updates on app startup.
+- **API Endpoints:** A comprehensive set of API endpoints for all CRUD operations and specific functionalities like authentication, session management, lead conversion, project stage updates, contact reassignment, invitation management, and industry management.
 
 **System Design Choices:**
 - **Single-file PHP:** All application logic resides within `public/index.php` for simplified deployment and management.
