@@ -1942,10 +1942,10 @@ if (isset($_GET['background'])) {
   <script>
     let currentUser = null;
     let currentView = 'leads';
-    let currentLeadTab = 'global';
-    let currentLeadPage = 1;
+    let currentLeadTab = localStorage.getItem('crm_lead_tab') || 'global';
+    let currentLeadPage = parseInt(localStorage.getItem('crm_lead_page')) || 1;
     let leadsPerPage = 20;
-    let currentLeadIndustry = '';
+    let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
     
@@ -2240,11 +2240,13 @@ if (isset($_GET['background'])) {
         </div>
       `;
       
-      switchView('dashboard');
+      const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
+      switchView(savedView);
     }
     
     function switchView(view) {
       currentView = view;
+      localStorage.setItem('crm_current_view', view);
       document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.nav button').forEach(b => {
         const text = b.textContent.toLowerCase();
@@ -2324,18 +2326,23 @@ if (isset($_GET['background'])) {
     
     function switchLeadTab(tab) {
       currentLeadTab = tab;
+      localStorage.setItem('crm_lead_tab', tab);
       currentLeadPage = 1;
+      localStorage.setItem('crm_lead_page', '1');
       renderLeads();
     }
     
     function filterLeadsByIndustry() {
       currentLeadIndustry = document.getElementById('industryFilter')?.value || '';
+      localStorage.setItem('crm_lead_industry', currentLeadIndustry);
       currentLeadPage = 1;
+      localStorage.setItem('crm_lead_page', '1');
       loadLeads();
     }
     
     function changeLeadPage(page) {
       currentLeadPage = page;
+      localStorage.setItem('crm_lead_page', page.toString());
       loadLeads();
     }
     
