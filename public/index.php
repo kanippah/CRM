@@ -2715,11 +2715,11 @@ if (isset($_GET['background'])) {
       showModal(`
         <h3>Import Leads</h3>
         <p style="color: var(--muted); margin-bottom: 16px;">
-          Paste CSV data (Name, Phone, Email, Company, Address)
+          Paste CSV data (Name, Phone, Email, Company, Industry, Address)
         </p>
         <form onsubmit="importLeads(event)">
           <div class="form-group">
-            <textarea name="csv" placeholder="John Doe,+1234567890,john@example.com,Acme Corp,123 Main St&#10;Jane Smith,+0987654321,jane@example.com,Tech Inc,456 Oak Ave" rows="10" required></textarea>
+            <textarea name="csv" placeholder="John Doe,+1234567890,john@example.com,Acme Corp,Technology,123 Main St&#10;Jane Smith,+0987654321,jane@example.com,Tech Inc,Healthcare,456 Oak Ave" rows="10" required></textarea>
           </div>
           <button type="submit" class="btn">Import</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
@@ -2738,7 +2738,8 @@ if (isset($_GET['background'])) {
           phone: parts[1] || '',
           email: parts[2] || '',
           company: parts[3] || '',
-          address: parts[4] || ''
+          industry: parts[4] || '',
+          address: parts[5] || ''
         };
       }).filter(l => l.name);
       
