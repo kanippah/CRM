@@ -483,8 +483,8 @@ function api_reset_password() {
   $token = $b['token'] ?? '';
   $new_password = $b['password'] ?? '';
   
-  if (strlen($new_password) < 6) {
-    respond(['error' => 'Password must be at least 6 characters'], 400);
+  if (strlen($new_password) < 8) {
+    respond(['error' => 'Password must be at least 8 characters'], 400);
   }
   
   $pdo = db();
@@ -522,6 +522,7 @@ function api_users_save() {
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
+  $send_invite = $b['send_invite'] ?? false;
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
@@ -559,6 +560,37 @@ function api_users_save() {
     $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id, username, email, full_name, role");
     $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
     $user = $stmt->fetch();
+    
+    // Send invite email if requested
+    if ($send_invite) {
+      global $SMTP_HOST;
+      $login_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+      
+      $email_body = "
+        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+          <div style='background: linear-gradient(135deg, #FF8C42, #0066CC); padding: 30px; text-align: center;'>
+            <h1 style='color: white; margin: 0;'>Welcome to Koadi Tech CRM</h1>
+          </div>
+          <div style='padding: 30px; background: #f9f9f9;'>
+            <p>Hello {$full_name},</p>
+            <p>You've been invited to join Koadi Technology CRM platform as a <strong>{$role}</strong> user.</p>
+            <p><strong>Your login credentials:</strong></p>
+            <div style='background: white; padding: 20px; border-radius: 8px; margin: 20px 0;'>
+              <p style='margin: 5px 0;'><strong>Email:</strong> {$email}</p>
+              <p style='margin: 5px 0;'><strong>Password:</strong> {$password}</p>
+            </div>
+            <p style='color: #666; font-size: 14px;'>⚠️ Please change your password after your first login for security.</p>
+            <div style='text-align: center; margin: 30px 0;'>
+              <a href='{$login_url}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Login to CRM</a>
+            </div>
+            <p>If you have any questions, please contact your administrator.</p>
+            <p style='margin-top: 30px; color: #999; font-size: 12px;'>This is an automated message from Koadi Technology CRM.</p>
+          </div>
+        </div>
+      ";
+      
+      send_email($email, 'Welcome to Koadi Tech CRM - Your Account Details', $email_body);
+    }
   }
   
   respond(['item' => $user]);
@@ -1628,7 +1660,7 @@ if (isset($_GET['background'])) {
         <div class="login-container">
           <div class="login-box">
             <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">CRM Login</h2>
+            <h2 style="margin-bottom: 24px;">Koadi Tech CRM</h2>
             <form onsubmit="handleLogin(event)">
               <div class="form-group">
                 <input type="email" name="email" placeholder="Email" autocomplete="email" required>
@@ -1726,10 +1758,10 @@ if (isset($_GET['background'])) {
             <p style="color: var(--muted); margin-bottom: 20px;">Enter your new password below.</p>
             <form onsubmit="handleResetPassword(event, '${token}')">
               <div class="form-group">
-                <input type="password" name="password" placeholder="New Password (min 6 characters)" required minlength="6">
+                <input type="password" name="password" placeholder="New Password (min 8 characters)" required minlength="8">
               </div>
               <div class="form-group">
-                <input type="password" name="confirm_password" placeholder="Confirm New Password" required minlength="6">
+                <input type="password" name="confirm_password" placeholder="Confirm New Password" required minlength="8">
               </div>
               <button type="submit" class="btn" style="width: 100%;">Reset Password</button>
               <button type="button" class="btn secondary" onclick="window.location.href = window.location.origin;" style="width: 100%; margin-top: 12px;">Back to Login</button>
@@ -2269,6 +2301,14 @@ if (isset($_GET['background'])) {
               <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
           </div>
+          ${!user ? `
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" name="send_invite" checked style="width: auto;">
+              <span>Send email invite to user</span>
+            </label>
+          </div>
+          ` : ''}
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
         </form>
@@ -2292,7 +2332,8 @@ if (isset($_GET['background'])) {
         email: email,
         full_name: form.full_name.value,
         password: form.password.value,
-        role: form.role.value
+        role: form.role.value,
+        send_invite: form.send_invite?.checked || false
       };
       
       try {
@@ -2302,6 +2343,9 @@ if (isset($_GET['background'])) {
         });
         closeModal();
         await loadUsers();
+        if (data.send_invite) {
+          alert('User created and invite email sent!');
+        }
       } catch (e) {
         alert('Error: ' + e.message);
       }

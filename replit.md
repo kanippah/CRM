@@ -4,12 +4,15 @@
 A comprehensive single-file CRM system built with PHP and PostgreSQL for managing contacts, leads, calls, projects, and settings. The system features role-based access control (Admin/Sales), contact management with duplicate detection, call tracking, project pipeline with Kanban visualization, data export/import, and light/dark mode theming.
 
 ## Recent Changes
-- **October 7, 2025**: Enhanced Authentication
+- **October 7, 2025**: Enhanced Authentication & User Invites
   - **Remember Me**: Auto-login with secure 30-day tokens
   - **Forgot Password**: Email-based password reset with 1-hour expiration
+  - **Password Security**: Minimum password length increased to 8 characters
+  - **Email Invites**: Admin can send email invites when creating new users
   - **SMTP Integration**: Email sending via help@koaditech.com (mail.koaditech.com:465)
-  - **Background Image**: Fixed login page background with reduced opacity (40%)
+  - **Background Image**: Fixed login page background with reduced opacity (15%)
   - **SSL Certificate**: Deployed to https://crm.koaditech.com with valid SSL
+  - **Branding Update**: Login page title changed to "Koadi Tech CRM"
 
 - **October 6, 2025**: Comprehensive CRM system enhancement
   - Added Dashboard with statistics and recent activity
