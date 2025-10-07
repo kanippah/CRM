@@ -1609,6 +1609,17 @@ if (isset($_GET['background'])) {
       color: var(--text);
     }
     
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    
+    select option {
+      background: var(--bg);
+      color: var(--text);
+    }
+    
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -2294,7 +2305,7 @@ if (isset($_GET['background'])) {
         <div class="toolbar">
           <button class="btn" onclick="openLeadForm()">+ Add Lead</button>
           ${isAdmin ? '<button class="btn warning" onclick="openImportModal()">📥 Import Leads</button>' : ''}
-          <select id="industryFilter" onchange="filterLeadsByIndustry()" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--text); margin-right: 10px;">
+          <select id="industryFilter" onchange="filterLeadsByIndustry()" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); margin-right: 10px; cursor: pointer;">
             <option value="">All Industries</option>
             ${industryOptions}
           </select>
