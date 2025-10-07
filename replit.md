@@ -4,6 +4,13 @@
 A comprehensive single-file CRM system built with PHP and PostgreSQL for managing contacts, leads, calls, projects, and settings. The system features role-based access control (Admin/Sales), contact management with duplicate detection, call tracking, project pipeline with Kanban visualization, data export/import, and light/dark mode theming.
 
 ## Recent Changes
+- **October 7, 2025**: Enhanced Authentication
+  - **Remember Me**: Auto-login with secure 30-day tokens
+  - **Forgot Password**: Email-based password reset with 1-hour expiration
+  - **SMTP Integration**: Email sending via help@koaditech.com (mail.koaditech.com:465)
+  - **Background Image**: Fixed login page background with reduced opacity (40%)
+  - **SSL Certificate**: Deployed to https://crm.koaditech.com with valid SSL
+
 - **October 6, 2025**: Comprehensive CRM system enhancement
   - Added Dashboard with statistics and recent activity
   - Implemented Contacts module with duplicate detection by phone/company
@@ -83,9 +90,11 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 - Manage user credentials and roles
 
 ### Authentication
-- Custom authentication system (not using Replit Auth)
+- Email-based authentication system with password reset
+- **Remember Me**: Secure 30-day auto-login with HTTP-only cookies
+- **Forgot Password**: Email-based password reset flow with 1-hour token expiration
 - Role-based access: Admin and Sales users
-- Session-based login/logout
+- Session-based login/logout with remember token support
 
 ### Design
 - Light/Dark mode toggle
@@ -97,7 +106,10 @@ A comprehensive single-file CRM system built with PHP and PostgreSQL for managin
 ## Database Schema
 
 ### Users Table
-- id, username, password (hashed), full_name, role (admin/sales), created_at
+- id, username, email, password (hashed), full_name, role (admin/sales), remember_token, created_at
+
+### Password Resets Table
+- id, email, token (hashed), expires_at, created_at
 
 ### Contacts Table
 - id, type (Individual/Company), company, name, email
