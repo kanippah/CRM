@@ -2888,9 +2888,7 @@ if (isset($_GET['background'])) {
       const tbody = document.querySelector('#contactsTable tbody');
       
       tbody.innerHTML = data.items.map(c => {
-        const nameDisplay = isAdmin 
-          ? `<a href="#" onclick="viewContact(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${c.name || '(no name)'}</a>`
-          : `<strong>${c.name || '(no name)'}</strong>`;
+        const nameDisplay = `<a href="#" onclick="viewContact(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${c.name || '(no name)'}</a>`;
         
         const actions = isAdmin 
           ? `<button class="btn" onclick="openContactReassignModal(${c.id})">Reassign</button>
