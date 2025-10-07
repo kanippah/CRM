@@ -1,0 +1,961 @@
+2025-Oct-07 03:40:24.696321
+Starting deployment of kanippah/CRM:main to dark-donkey-akggwww4ww000ws80wg4g00o.
+2025-Oct-07 03:40:24.934330
+Preparing container with helper image: ghcr.io/coollabsio/coolify-helper:1.0.11.
+2025-Oct-07 03:40:25.051177
+[CMD]: docker stop --time=30 xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:40:25.051177
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-07 03:40:25.052938
+Error response from daemon: No such container: xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:40:25.166178
+[CMD]: docker rm -f xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:40:25.166178
+Error response from daemon: No such container: xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:40:25.322928
+[CMD]: docker run -d --network coolify --name xosg8g848w844g8c8sgwggko  --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/coollabsio/coolify-helper:1.0.11
+2025-Oct-07 03:40:25.322928
+72346b18808f3ef48f584a66f9d6a6903c51594314aaaf35b815f615c5018639
+2025-Oct-07 03:40:25.968739
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'GIT_SSH_COMMAND="ssh -o ConnectTimeout=30 -p 22 -o Port=22 -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git ls-remote https://github.com/kanippah/CRM refs/heads/main'
+2025-Oct-07 03:40:25.968739
+244db0f640fe53a7e73571b8f1a6ce5927de913d	refs/heads/main
+2025-Oct-07 03:40:25.997875
+----------------------------------------
+2025-Oct-07 03:40:26.006198
+Importing kanippah/CRM:main (commit sha HEAD) to /artifacts/xosg8g848w844g8c8sgwggko.
+2025-Oct-07 03:40:26.153524
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'git clone --depth=1 --recurse-submodules --shallow-submodules -b 'main' 'https://github.com/kanippah/CRM' '/artifacts/xosg8g848w844g8c8sgwggko' && cd /artifacts/xosg8g848w844g8c8sgwggko && if [ -f .gitmodules ]; then sed -i "s#git@\(.*\):#https://\1/#g" /artifacts/xosg8g848w844g8c8sgwggko/.gitmodules || true && git submodule sync && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git submodule update --init --recursive --depth=1; fi && cd /artifacts/xosg8g848w844g8c8sgwggko && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git lfs pull'
+2025-Oct-07 03:40:26.153524
+Cloning into '/artifacts/xosg8g848w844g8c8sgwggko'...
+2025-Oct-07 03:40:26.818780
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'cd /artifacts/xosg8g848w844g8c8sgwggko && git log -1 244db0f640fe53a7e73571b8f1a6ce5927de913d --pretty=%B'
+2025-Oct-07 03:40:26.818780
+Add secure user invitation system for new account creation
+2025-Oct-07 03:40:26.818780
+2025-Oct-07 03:40:26.818780
+Introduces a new 'invitations' table, an 'api_send_invite' function for admins to email invites with secure setup links, and an 'api_accept_invite' endpoint for users to finalize account creation with their own passwords.
+2025-Oct-07 03:40:26.818780
+2025-Oct-07 03:40:26.818780
+Replit-Commit-Author: Agent
+2025-Oct-07 03:40:26.818780
+Replit-Commit-Session-Id: 4427786c-0e65-404c-bbd7-a69d958b800c
+2025-Oct-07 03:40:26.818780
+Replit-Commit-Checkpoint-Type: full_checkpoint
+2025-Oct-07 03:40:26.818780
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/352a9497-fbf5-4d3b-8a95-92cb588c988d/4427786c-0e65-404c-bbd7-a69d958b800c/17TKUAZ
+2025-Oct-07 03:40:27.728059
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'cat /artifacts/xosg8g848w844g8c8sgwggko/Dockerfile'
+2025-Oct-07 03:40:27.728059
+FROM php:8.2-cli
+2025-Oct-07 03:40:27.728059
+2025-Oct-07 03:40:27.728059
+RUN apt-get update && apt-get install -y \
+2025-Oct-07 03:40:27.728059
+libpq-dev \
+2025-Oct-07 03:40:27.728059
+&& docker-php-ext-install pdo pdo_pgsql \
+2025-Oct-07 03:40:27.728059
+&& apt-get clean \
+2025-Oct-07 03:40:27.728059
+&& rm -rf /var/lib/apt/lists/*
+2025-Oct-07 03:40:27.728059
+2025-Oct-07 03:40:27.728059
+WORKDIR /app
+2025-Oct-07 03:40:27.728059
+2025-Oct-07 03:40:27.728059
+COPY . /app
+2025-Oct-07 03:40:27.728059
+2025-Oct-07 03:40:27.728059
+EXPOSE 5000
+2025-Oct-07 03:40:27.728059
+2025-Oct-07 03:40:27.728059
+CMD ["php", "-S", "0.0.0.0:5000", "-t", "public"]
+2025-Oct-07 03:40:28.103160
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'cat /artifacts/xosg8g848w844g8c8sgwggko/Dockerfile'
+2025-Oct-07 03:40:28.103160
+FROM php:8.2-cli
+2025-Oct-07 03:40:28.103160
+2025-Oct-07 03:40:28.103160
+RUN apt-get update && apt-get install -y \
+2025-Oct-07 03:40:28.103160
+libpq-dev \
+2025-Oct-07 03:40:28.103160
+&& docker-php-ext-install pdo pdo_pgsql \
+2025-Oct-07 03:40:28.103160
+&& apt-get clean \
+2025-Oct-07 03:40:28.103160
+&& rm -rf /var/lib/apt/lists/*
+2025-Oct-07 03:40:28.103160
+2025-Oct-07 03:40:28.103160
+WORKDIR /app
+2025-Oct-07 03:40:28.103160
+2025-Oct-07 03:40:28.103160
+COPY . /app
+2025-Oct-07 03:40:28.103160
+2025-Oct-07 03:40:28.103160
+EXPOSE 5000
+2025-Oct-07 03:40:28.103160
+2025-Oct-07 03:40:28.103160
+CMD ["php", "-S", "0.0.0.0:5000", "-t", "public"]
+2025-Oct-07 03:40:28.338250
+----------------------------------------
+2025-Oct-07 03:40:28.345437
+Building docker image started.
+2025-Oct-07 03:40:28.352240
+To check the current progress, click on Show Debug Logs.
+2025-Oct-07 03:40:28.679785
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'cat /artifacts/build.sh'
+2025-Oct-07 03:40:28.679785
+docker build --no-cache  --add-host ps0w848840wc0sogwco444g4:172.18.0.3 --network host -f /artifacts/xosg8g848w844g8c8sgwggko/Dockerfile --build-arg SOURCE_COMMIT='244db0f640fe53a7e73571b8f1a6ce5927de913d' --build-arg PGDATABASE='postgres' --build-arg PGHOST='ps0w848840wc0sogwco444g4' --build-arg PGPASSWORD='YUfkktGYt3jv3oKg3drD3XJbPJfkmXJohQKZOAv3K3EctrjP9v4bkJ85PfQ1Wbys' --build-arg PGPORT='5432' --build-arg PGUSER='postgres' --build-arg SMTP_HOST='mail.koaditech.com' --build-arg SMTP_PASS='Men4patj@3112' --build-arg SMTP_PORT='465' --build-arg SMTP_USER='help@koaditech.com' --build-arg COOLIFY_URL='http://ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,https://crm.koaditech.com' --build-arg COOLIFY_FQDN='ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,crm.koaditech.com' --build-arg COOLIFY_BRANCH='main' --build-arg COOLIFY_RESOURCE_UUID='ngg0cow008g8g4ko8ow808o8' --build-arg COOLIFY_CONTAINER_NAME='ngg0cow008g8g4ko8ow808o8-034024473384' --build-arg COOLIFY_BUILD_SECRETS_HASH=35ab5147e8cd39990f34d51951f9014af9ec6febb984780f5a9332a25d50498b --build-arg 'COOLIFY_URL=http://ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,https://crm.koaditech.com' --build-arg 'COOLIFY_FQDN=ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,crm.koaditech.com' --build-arg 'COOLIFY_BRANCH=main' --build-arg 'COOLIFY_RESOURCE_UUID=ngg0cow008g8g4ko8ow808o8' --build-arg 'COOLIFY_CONTAINER_NAME=ngg0cow008g8g4ko8ow808o8-034024473384' --progress plain -t ngg0cow008g8g4ko8ow808o8:244db0f640fe53a7e73571b8f1a6ce5927de913d /artifacts/xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:40:29.080693
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'bash /artifacts/build.sh'
+2025-Oct-07 03:40:29.080693
+#0 building with "default" instance using docker driver
+2025-Oct-07 03:40:29.080693
+2025-Oct-07 03:40:29.080693
+#1 [internal] load build definition from Dockerfile
+2025-Oct-07 03:40:29.080693
+#1 transferring dockerfile: 1.06kB done
+2025-Oct-07 03:40:29.080693
+#1 DONE 0.0s
+2025-Oct-07 03:40:29.080693
+2025-Oct-07 03:40:29.080693
+#2 [internal] load metadata for docker.io/library/php:8.2-cli
+2025-Oct-07 03:40:29.080693
+#2 DONE 0.1s
+2025-Oct-07 03:40:29.080693
+2025-Oct-07 03:40:29.080693
+#3 [internal] load .dockerignore
+2025-Oct-07 03:40:29.080693
+#3 transferring context:
+2025-Oct-07 03:40:29.259522
+#3 transferring context: 104B done
+2025-Oct-07 03:40:29.259522
+#3 DONE 0.0s
+2025-Oct-07 03:40:29.259522
+2025-Oct-07 03:40:29.259522
+#4 [1/4] FROM docker.io/library/php:8.2-cli@sha256:8ad4bba8e36aa01b994a5cbbb57dafd5a01a5709870f3e8cfb87b9a0f65b2d4d
+2025-Oct-07 03:40:29.259522
+#4 CACHED
+2025-Oct-07 03:40:29.259522
+2025-Oct-07 03:40:29.259522
+#5 [internal] load build context
+2025-Oct-07 03:40:29.259522
+#5 transferring context: 291.35kB 0.0s done
+2025-Oct-07 03:40:29.259522
+#5 DONE 0.0s
+2025-Oct-07 03:40:29.259522
+2025-Oct-07 03:40:29.259522
+#6 [2/4] RUN apt-get update && apt-get install -y     libpq-dev     && docker-php-ext-install pdo pdo_pgsql     && apt-get clean     && rm -rf /var/lib/apt/lists/*
+2025-Oct-07 03:40:29.259522
+#6 0.167 Hit:1 http://deb.debian.org/debian trixie InRelease
+2025-Oct-07 03:40:29.381959
+#6 0.167 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+2025-Oct-07 03:40:29.381959
+#6 0.172 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+2025-Oct-07 03:40:29.381959
+#6 0.207 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9669 kB]
+2025-Oct-07 03:40:29.381959
+#6 0.290 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
+2025-Oct-07 03:40:29.533362
+#6 0.291 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [51.4 kB]
+2025-Oct-07 03:40:30.079399
+#6 0.988 Fetched 9816 kB in 1s (11.3 MB/s)
+2025-Oct-07 03:40:30.079399
+#6 0.988 Reading package lists...
+2025-Oct-07 03:40:30.687184
+2025-Oct-07 03:40:30.861565
+#6 1.619 Reading package lists...
+2025-Oct-07 03:40:31.328570
+2025-Oct-07 03:40:31.523888
+#6 2.281 Building dependency tree...
+2025-Oct-07 03:40:31.580927
+#6 2.489 Reading state information...
+2025-Oct-07 03:40:31.731660
+2025-Oct-07 03:40:31.824335
+#6 2.733 The following additional packages will be installed:
+2025-Oct-07 03:40:31.951733
+#6 2.734   libpq5 libssl-dev libssl3t64 openssl openssl-provider-legacy
+2025-Oct-07 03:40:31.951733
+#6 2.735 Suggested packages:
+2025-Oct-07 03:40:31.951733
+#6 2.735   postgresql-doc-17 libssl-doc
+2025-Oct-07 03:40:31.951733
+#6 2.790 The following NEW packages will be installed:
+2025-Oct-07 03:40:31.951733
+#6 2.791   libpq-dev libpq5 libssl-dev
+2025-Oct-07 03:40:31.951733
+#6 2.793 The following packages will be upgraded:
+2025-Oct-07 03:40:31.951733
+#6 2.793   libssl3t64 openssl openssl-provider-legacy
+2025-Oct-07 03:40:31.951733
+#6 2.832 3 upgraded, 3 newly installed, 0 to remove and 0 not upgraded.
+2025-Oct-07 03:40:31.951733
+#6 2.832 Need to get 7571 kB of archives.
+2025-Oct-07 03:40:31.951733
+#6 2.832 After this operation, 18.3 MB of additional disk space will be used.
+2025-Oct-07 03:40:31.951733
+#6 2.832 Get:1 http://deb.debian.org/debian-security trixie-security/main amd64 openssl-provider-legacy amd64 3.5.1-1+deb13u1 [307 kB]
+2025-Oct-07 03:40:31.951733
+#6 2.860 Get:2 http://deb.debian.org/debian-security trixie-security/main amd64 libssl3t64 amd64 3.5.1-1+deb13u1 [2437 kB]
+2025-Oct-07 03:40:32.141556
+#6 2.883 Get:3 http://deb.debian.org/debian trixie/main amd64 libpq5 amd64 17.6-0+deb13u1 [228 kB]
+2025-Oct-07 03:40:32.141556
+#6 2.886 Get:4 http://deb.debian.org/debian-security trixie-security/main amd64 libssl-dev amd64 3.5.1-1+deb13u1 [2955 kB]
+2025-Oct-07 03:40:32.141556
+#6 2.898 Get:5 http://deb.debian.org/debian trixie/main amd64 libpq-dev amd64 17.6-0+deb13u1 [150 kB]
+2025-Oct-07 03:40:32.141556
+#6 2.900 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 openssl amd64 3.5.1-1+deb13u1 [1494 kB]
+2025-Oct-07 03:40:32.179374
+#6 3.088 debconf: unable to initialize frontend: Dialog
+2025-Oct-07 03:40:32.345224
+#6 3.088 debconf: (TERM is not set, so the dialog frontend is not usable.)
+2025-Oct-07 03:40:32.345224
+#6 3.088 debconf: falling back to frontend: Readline
+2025-Oct-07 03:40:32.345224
+#6 3.099 debconf: unable to initialize frontend: Readline
+2025-Oct-07 03:40:32.345224
+#6 3.099 debconf: (This frontend requires a controlling tty.)
+2025-Oct-07 03:40:32.345224
+#6 3.099 debconf: falling back to frontend: Teletype
+2025-Oct-07 03:40:32.345224
+#6 3.103 debconf: unable to initialize frontend: Teletype
+2025-Oct-07 03:40:32.345224
+#6 3.103 debconf: (This frontend requires a controlling tty.)
+2025-Oct-07 03:40:32.345224
+#6 3.103 debconf: falling back to frontend: Noninteractive
+2025-Oct-07 03:40:32.839024
+#6 3.747 Fetched 7571 kB in 0s (76.0 MB/s)
+2025-Oct-07 03:40:32.961754
+#6 3.776 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 14644 files and directories currently installed.)
+2025-Oct-07 03:40:32.961754
+#6 3.786 Preparing to unpack .../openssl-provider-legacy_3.5.1-1+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:32.961754
+#6 3.793 Unpacking openssl-provider-legacy (3.5.1-1+deb13u1) over (3.5.1-1) ...
+2025-Oct-07 03:40:32.961754
+#6 3.844 Setting up openssl-provider-legacy (3.5.1-1+deb13u1) ...
+2025-Oct-07 03:40:32.961754
+#6 3.871 (Reading database ...
+2025-Oct-07 03:40:33.118340
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 14644 files and directories currently installed.)
+2025-Oct-07 03:40:33.118340
+#6 3.878 Preparing to unpack .../libssl3t64_3.5.1-1+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:33.118340
+#6 3.886 Unpacking libssl3t64:amd64 (3.5.1-1+deb13u1) over (3.5.1-1) ...
+2025-Oct-07 03:40:33.118340
+#6 4.027 Setting up libssl3t64:amd64 (3.5.1-1+deb13u1) ...
+2025-Oct-07 03:40:33.349757
+#6 4.049 Selecting previously unselected package libpq5:amd64.
+2025-Oct-07 03:40:33.349757
+#6 4.049 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 14644 files and directories currently installed.)
+2025-Oct-07 03:40:33.349757
+#6 4.056 Preparing to unpack .../libpq5_17.6-0+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:33.349757
+#6 4.058 Unpacking libpq5:amd64 (17.6-0+deb13u1) ...
+2025-Oct-07 03:40:33.349757
+#6 4.100 Selecting previously unselected package libssl-dev:amd64.
+2025-Oct-07 03:40:33.349757
+#6 4.104 Preparing to unpack .../libssl-dev_3.5.1-1+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:33.349757
+#6 4.108 Unpacking libssl-dev:amd64 (3.5.1-1+deb13u1) ...
+2025-Oct-07 03:40:33.377880
+#6 4.287 Selecting previously unselected package libpq-dev.
+2025-Oct-07 03:40:33.480140
+#6 4.289 Preparing to unpack .../libpq-dev_17.6-0+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:33.480140
+#6 4.291 Unpacking libpq-dev (17.6-0+deb13u1) ...
+2025-Oct-07 03:40:33.480140
+#6 4.319 Preparing to unpack .../openssl_3.5.1-1+deb13u1_amd64.deb ...
+2025-Oct-07 03:40:33.480140
+#6 4.325 Unpacking openssl (3.5.1-1+deb13u1) over (3.5.1-1) ...
+2025-Oct-07 03:40:33.480140
+#6 4.389 Setting up libpq5:amd64 (17.6-0+deb13u1) ...
+2025-Oct-07 03:40:33.660907
+#6 4.395 Setting up libssl-dev:amd64 (3.5.1-1+deb13u1) ...
+2025-Oct-07 03:40:33.660907
+#6 4.401 Setting up openssl (3.5.1-1+deb13u1) ...
+2025-Oct-07 03:40:33.660907
+#6 4.411 Setting up libpq-dev (17.6-0+deb13u1) ...
+2025-Oct-07 03:40:33.660907
+#6 4.419 Processing triggers for libc-bin (2.41-12) ...
+2025-Oct-07 03:40:34.885628
+#6 5.794 Configuring for:
+2025-Oct-07 03:40:34.885628
+#6 5.794 PHP Api Version:         20220829
+2025-Oct-07 03:40:34.885628
+#6 5.794 Zend Module Api No:      20220829
+2025-Oct-07 03:40:34.885628
+#6 5.794 Zend Extension Api No:   420220829
+2025-Oct-07 03:40:35.558341
+#6 6.467 checking for grep that handles long lines and -e...
+2025-Oct-07 03:40:35.692235
+/usr/bin/grep
+2025-Oct-07 03:40:35.692235
+#6 6.468 checking for egrep... /usr/bin/grep -E
+2025-Oct-07 03:40:35.692235
+#6 6.470 checking for a sed that does not truncate output... /usr/bin/sed
+2025-Oct-07 03:40:35.692235
+#6 6.492 checking for pkg-config... /usr/bin/pkg-config
+2025-Oct-07 03:40:35.692235
+#6 6.492 checking pkg-config is at least version 0.9.0... yes
+2025-Oct-07 03:40:35.692235
+#6 6.494 checking for cc... cc
+2025-Oct-07 03:40:35.692235
+#6 6.518 checking whether the C compiler works... yes
+2025-Oct-07 03:40:35.692235
+#6 6.560 checking for C compiler default output file name... a.out
+2025-Oct-07 03:40:35.692235
+#6 6.561 checking for suffix of executables...
+2025-Oct-07 03:40:35.814670
+#6 6.603 checking whether we are cross compiling... no
+2025-Oct-07 03:40:35.814670
+#6 6.650 checking for suffix of object files... o
+2025-Oct-07 03:40:35.819590
+#6 6.675 checking whether the compiler supports GNU C... yes
+2025-Oct-07 03:40:35.819590
+#6 6.700 checking whether cc accepts -g... yes
+2025-Oct-07 03:40:35.923606
+#6 6.723 checking for cc option to enable C11 features... none needed
+2025-Oct-07 03:40:35.923606
+#6 6.778 checking how to run the C preprocessor... cc -E
+2025-Oct-07 03:40:35.923606
+#6 6.832 checking for egrep -e...
+2025-Oct-07 03:40:36.037326
+(cached) /usr/bin/grep -E
+2025-Oct-07 03:40:36.037326
+#6 6.832 checking for icc... no
+2025-Oct-07 03:40:36.037326
+#6 6.842 checking for suncc... no
+2025-Oct-07 03:40:36.037326
+#6 6.852 checking for system library directory... lib
+2025-Oct-07 03:40:36.037326
+#6 6.852 checking if compiler supports -Wl,-rpath,... yes
+2025-Oct-07 03:40:36.037326
+#6 6.894 checking build system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:36.037326
+#6 6.899 checking host system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:36.037326
+#6 6.900 checking target system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:36.037326
+#6 6.931 checking for PHP prefix... /usr/local
+2025-Oct-07 03:40:36.037326
+#6 6.931 checking for PHP includes... -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib
+2025-Oct-07 03:40:36.037326
+#6 6.931 checking for PHP extension directory... /usr/local/lib/php/extensions/no-debug-non-zts-20220829
+2025-Oct-07 03:40:36.037326
+#6 6.932 checking for PHP installed headers prefix... /usr/local/include/php
+2025-Oct-07 03:40:36.037326
+#6 6.932 checking if debug is enabled... no
+2025-Oct-07 03:40:36.037326
+#6 6.946 checking if zts is enabled...
+2025-Oct-07 03:40:36.146806
+no
+2025-Oct-07 03:40:36.150751
+#6 6.962 checking for gawk... no
+2025-Oct-07 03:40:36.150751
+#6 6.962 checking for nawk... nawk
+2025-Oct-07 03:40:36.150751
+#6 6.962 checking if nawk is broken... no
+2025-Oct-07 03:40:36.150751
+#6 6.964 checking whether to enable PDO support... yes, shared
+2025-Oct-07 03:40:36.150751
+#6 6.976 checking for a sed that does not truncate output... /usr/bin/sed
+2025-Oct-07 03:40:36.150751
+#6 6.979 checking for ld used by cc... /usr/bin/ld
+2025-Oct-07 03:40:36.150751
+#6 6.983 checking if the linker (/usr/bin/ld) is GNU ld... yes
+2025-Oct-07 03:40:36.150751
+#6 6.986 checking for /usr/bin/ld option to reload object files... -r
+2025-Oct-07 03:40:36.150751
+#6 6.987 checking for BSD-compatible nm... /usr/bin/nm -B
+2025-Oct-07 03:40:36.150751
+#6 6.990 checking whether ln -s works... yes
+2025-Oct-07 03:40:36.150751
+#6 6.990 checking how to recognize dependent libraries... pass_all
+2025-Oct-07 03:40:36.150751
+#6 7.018 checking for stdio.h... yes
+2025-Oct-07 03:40:36.150751
+#6 7.037 checking for stdlib.h... yes
+2025-Oct-07 03:40:36.258024
+#6 7.056 checking for string.h... yes
+2025-Oct-07 03:40:36.258024
+#6 7.081 checking for inttypes.h... yes
+2025-Oct-07 03:40:36.258024
+#6 7.103 checking for stdint.h... yes
+2025-Oct-07 03:40:36.258024
+#6 7.124 checking for strings.h... yes
+2025-Oct-07 03:40:36.258024
+#6 7.144 checking for sys/stat.h... yes
+2025-Oct-07 03:40:36.400535
+#6 7.167 checking for sys/types.h... yes
+2025-Oct-07 03:40:36.400535
+#6 7.189 checking for unistd.h... yes
+2025-Oct-07 03:40:36.400535
+#6 7.220 checking for dlfcn.h... yes
+2025-Oct-07 03:40:36.400535
+#6 7.245 checking the maximum length of command line arguments... 1572864
+2025-Oct-07 03:40:36.400535
+#6 7.248 checking command to parse /usr/bin/nm -B output from cc object... ok
+2025-Oct-07 03:40:36.400535
+#6 7.309 checking for objdir...
+2025-Oct-07 03:40:36.564071
+.libs
+2025-Oct-07 03:40:36.564071
+#6 7.313 checking for ar... ar
+2025-Oct-07 03:40:36.564071
+#6 7.313 checking for ranlib... ranlib
+2025-Oct-07 03:40:36.564071
+#6 7.314 checking for strip... strip
+2025-Oct-07 03:40:36.564071
+#6 7.369 checking if cc supports -fno-rtti -fno-exceptions... no
+2025-Oct-07 03:40:36.564071
+#6 7.390 checking for cc option to produce PIC... -fPIC
+2025-Oct-07 03:40:36.564071
+#6 7.391 checking if cc PIC flag -fPIC works... yes
+2025-Oct-07 03:40:36.564071
+#6 7.409 checking if cc static flag -static works... yes
+2025-Oct-07 03:40:36.564071
+#6 7.472 checking if cc supports -c -o file.o...
+2025-Oct-07 03:40:36.774763
+yes
+2025-Oct-07 03:40:36.774763
+#6 7.496 checking whether the cc linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+2025-Oct-07 03:40:36.774763
+#6 7.506 checking whether -lc should be explicitly linked in... no
+2025-Oct-07 03:40:36.774763
+#6 7.530 checking dynamic linker characteristics... GNU/Linux ld.so
+2025-Oct-07 03:40:36.774763
+#6 7.543 checking how to hardcode library paths into programs... immediate
+2025-Oct-07 03:40:36.774763
+#6 7.544 checking whether stripping libraries is possible... yes
+2025-Oct-07 03:40:36.774763
+#6 7.546 checking if libtool supports shared libraries... yes
+2025-Oct-07 03:40:36.774763
+#6 7.546 checking whether to build shared libraries... yes
+2025-Oct-07 03:40:36.774763
+#6 7.546 checking whether to build static libraries... no
+2025-Oct-07 03:40:36.774763
+#6 7.683
+2025-Oct-07 03:40:36.774763
+#6 7.683 creating libtool
+2025-Oct-07 03:40:36.898065
+#6 7.702 appending configuration tag "CXX" to libtool
+2025-Oct-07 03:40:36.898065
+#6 7.765 configure: patching config.h.in
+2025-Oct-07 03:40:36.898065
+#6 7.767 configure: creating ./config.status
+2025-Oct-07 03:40:36.898065
+#6 7.807 config.status: creating config.h
+2025-Oct-07 03:40:37.003060
+#6 7.835 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE    -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo.c -o pdo.lo  -MMD -MF pdo.dep -MT pdo.lo
+2025-Oct-07 03:40:37.006558
+#6 7.911 mkdir .libs
+2025-Oct-07 03:40:37.155549
+#6 7.913  cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo.c -MMD -MF pdo.dep -MT pdo.lo  -fPIC -DPIC -o .libs/pdo.o
+2025-Oct-07 03:40:37.225302
+#6 8.134 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE    -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_dbh.c -o pdo_dbh.lo  -MMD -MF pdo_dbh.dep -MT pdo_dbh.lo
+2025-Oct-07 03:40:37.452258
+#6 8.210  cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_dbh.c -MMD -MF pdo_dbh.dep -MT pdo_dbh.lo  -fPIC -DPIC -o .libs/pdo_dbh.o
+2025-Oct-07 03:40:38.104124
+#6 9.013 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE    -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_stmt.c -o pdo_stmt.lo  -MMD -MF pdo_stmt.dep -MT pdo_stmt.lo
+2025-Oct-07 03:40:38.332575
+#6 9.091  cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_stmt.c -MMD -MF pdo_stmt.dep -MT pdo_stmt.lo  -fPIC -DPIC -o .libs/pdo_stmt.o
+2025-Oct-07 03:40:39.075719
+#6 9.984 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE    -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_sql_parser.c -o pdo_sql_parser.lo  -MMD -MF pdo_sql_parser.dep -MT pdo_sql_parser.lo
+2025-Oct-07 03:40:39.307888
+#6 10.07  cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_sql_parser.c -MMD -MF pdo_sql_parser.dep -MT pdo_sql_parser.lo  -fPIC -DPIC -o .libs/pdo_sql_parser.o
+2025-Oct-07 03:40:39.455596
+#6 10.36 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE    -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_sqlstate.c -o pdo_sqlstate.lo  -MMD -MF pdo_sqlstate.dep -MT pdo_sqlstate.lo
+2025-Oct-07 03:40:39.652637
+#6 10.44  cc -I. -I/usr/src/php/ext/pdo -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo/pdo_sqlstate.c -MMD -MF pdo_sqlstate.dep -MT pdo_sqlstate.lo  -fPIC -DPIC -o .libs/pdo_sqlstate.o
+2025-Oct-07 03:40:39.652637
+#6 10.56 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=link cc -shared -I/usr/src/php/ext/pdo/include -I/usr/src/php/ext/pdo/main -I/usr/src/php/ext/pdo -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE  -Wl,-O1 -pie  -o pdo.la -export-dynamic -avoid-version -prefer-pic -module -rpath /usr/src/php/ext/pdo/modules  pdo.lo pdo_dbh.lo pdo_stmt.lo pdo_sql_parser.lo pdo_sqlstate.lo
+2025-Oct-07 03:40:39.759317
+#6 10.65 cc -shared  .libs/pdo.o .libs/pdo_dbh.o .libs/pdo_stmt.o .libs/pdo_sql_parser.o .libs/pdo_sqlstate.o   -Wl,-O1 -Wl,-soname -Wl,pdo.so -o .libs/pdo.so
+2025-Oct-07 03:40:39.759317
+#6 10.67 creating pdo.la
+2025-Oct-07 03:40:39.868863
+#6 10.67 (cd .libs && rm -f pdo.la && ln -s ../pdo.la pdo.la)
+2025-Oct-07 03:40:39.868863
+#6 10.68 /bin/bash /usr/src/php/ext/pdo/libtool --tag=CC --mode=install cp ./pdo.la /usr/src/php/ext/pdo/modules
+2025-Oct-07 03:40:39.868863
+#6 10.70 cp ./.libs/pdo.so /usr/src/php/ext/pdo/modules/pdo.so
+2025-Oct-07 03:40:39.868863
+#6 10.70 cp ./.libs/pdo.lai /usr/src/php/ext/pdo/modules/pdo.la
+2025-Oct-07 03:40:39.868863
+#6 10.72 PATH="$PATH:/sbin" ldconfig -n /usr/src/php/ext/pdo/modules
+2025-Oct-07 03:40:39.868863
+#6 10.72 ----------------------------------------------------------------------
+2025-Oct-07 03:40:39.868863
+#6 10.72 Libraries have been installed in:
+2025-Oct-07 03:40:39.868863
+#6 10.72    /usr/src/php/ext/pdo/modules
+2025-Oct-07 03:40:39.868863
+#6 10.72
+2025-Oct-07 03:40:39.868863
+#6 10.72 If you ever happen to want to link against installed libraries
+2025-Oct-07 03:40:39.868863
+#6 10.72 in a given directory, LIBDIR, you must either use libtool, and
+2025-Oct-07 03:40:39.868863
+#6 10.72 specify the full pathname of the library, or use the `-LLIBDIR'
+2025-Oct-07 03:40:39.868863
+#6 10.72 flag during linking and do at least one of the following:
+2025-Oct-07 03:40:39.868863
+#6 10.72    - add LIBDIR to the `LD_LIBRARY_PATH' environment variable
+2025-Oct-07 03:40:39.868863
+#6 10.72      during execution
+2025-Oct-07 03:40:39.868863
+#6 10.72    - add LIBDIR to the `LD_RUN_PATH' environment variable
+2025-Oct-07 03:40:39.868863
+#6 10.72      during linking
+2025-Oct-07 03:40:39.868863
+#6 10.72    - use the `-Wl,--rpath -Wl,LIBDIR' linker flag
+2025-Oct-07 03:40:39.868863
+#6 10.72    - have your system administrator add LIBDIR to `/etc/ld.so.conf'
+2025-Oct-07 03:40:39.868863
+#6 10.72
+2025-Oct-07 03:40:39.868863
+#6 10.72 See any operating system documentation about shared libraries for
+2025-Oct-07 03:40:39.868863
+#6 10.72 more information, such as the ld(1) and ld.so(8) manual pages.
+2025-Oct-07 03:40:39.868863
+#6 10.72 ----------------------------------------------------------------------
+2025-Oct-07 03:40:39.868863
+#6 10.72
+2025-Oct-07 03:40:39.868863
+#6 10.72 Build complete.
+2025-Oct-07 03:40:39.868863
+#6 10.72 Don't forget to run 'make test'.
+2025-Oct-07 03:40:39.868863
+#6 10.72
+2025-Oct-07 03:40:39.868863
+#6 10.75 + strip --strip-all modules/pdo.so
+2025-Oct-07 03:40:39.868863
+#6 10.78 Installing shared extensions:     /usr/local/lib/php/extensions/no-debug-non-zts-20220829/
+2025-Oct-07 03:40:39.987884
+#6 10.90 Installing header files:          /usr/local/include/php/
+2025-Oct-07 03:40:40.171207
+#6 10.97 Installing PDO headers:           /usr/local/include/php/ext/pdo/
+2025-Oct-07 03:40:40.171207
+#6 11.08
+2025-Oct-07 03:40:40.171207
+#6 11.08 warning: pdo (pdo) is already loaded!
+2025-Oct-07 03:40:40.171207
+#6 11.08
+2025-Oct-07 03:40:40.370731
+#6 11.08 find . -name \*.gcno -o -name \*.gcda | xargs rm -f
+2025-Oct-07 03:40:40.370731
+#6 11.08 find . -name \*.lo -o -name \*.o -o -name \*.dep | xargs rm -f
+2025-Oct-07 03:40:40.370731
+#6 11.09 find . -name \*.la -o -name \*.a | xargs rm -f
+2025-Oct-07 03:40:40.370731
+#6 11.09 find . -name \*.so | xargs rm -f
+2025-Oct-07 03:40:40.370731
+#6 11.09 find . -name .libs -a -type d|xargs rm -rf
+2025-Oct-07 03:40:40.370731
+#6 11.10 rm -f libphp.la      modules/* libs/*
+2025-Oct-07 03:40:40.370731
+#6 11.10 rm -f ext/opcache/jit/zend_jit_x86.c
+2025-Oct-07 03:40:40.370731
+#6 11.10 rm -f ext/opcache/jit/zend_jit_arm64.c
+2025-Oct-07 03:40:40.370731
+#6 11.10 rm -f ext/opcache/minilua
+2025-Oct-07 03:40:40.370731
+#6 11.13 Configuring for:
+2025-Oct-07 03:40:40.370731
+#6 11.13 PHP Api Version:         20220829
+2025-Oct-07 03:40:40.370731
+#6 11.13 Zend Module Api No:      20220829
+2025-Oct-07 03:40:40.370731
+#6 11.13 Zend Extension Api No:   420220829
+2025-Oct-07 03:40:40.877345
+#6 11.79 checking for grep that handles long lines and -e...
+2025-Oct-07 03:40:41.011860
+/usr/bin/grep
+2025-Oct-07 03:40:41.011860
+#6 11.79 checking for egrep... /usr/bin/grep -E
+2025-Oct-07 03:40:41.011860
+#6 11.79 checking for a sed that does not truncate output... /usr/bin/sed
+2025-Oct-07 03:40:41.011860
+#6 11.81 checking for pkg-config... /usr/bin/pkg-config
+2025-Oct-07 03:40:41.011860
+#6 11.81 checking pkg-config is at least version 0.9.0... yes
+2025-Oct-07 03:40:41.011860
+#6 11.82 checking for cc... cc
+2025-Oct-07 03:40:41.011860
+#6 11.84 checking whether the C compiler works... yes
+2025-Oct-07 03:40:41.011860
+#6 11.88 checking for C compiler default output file name... a.out
+2025-Oct-07 03:40:41.011860
+#6 11.88 checking for suffix of executables...
+2025-Oct-07 03:40:41.131784
+#6 11.92 checking whether we are cross compiling... no
+2025-Oct-07 03:40:41.131784
+#6 11.98 checking for suffix of object files... o
+2025-Oct-07 03:40:41.131784
+#6 12.01 checking whether the compiler supports GNU C... yes
+2025-Oct-07 03:40:41.131784
+#6 12.04 checking whether cc accepts -g...
+2025-Oct-07 03:40:41.242611
+yes
+2025-Oct-07 03:40:41.242611
+#6 12.08 checking for cc option to enable C11 features... none needed
+2025-Oct-07 03:40:41.242611
+#6 12.13 checking how to run the C preprocessor... cc -E
+2025-Oct-07 03:40:41.354252
+#6 12.17 checking for egrep -e... (cached) /usr/bin/grep -E
+2025-Oct-07 03:40:41.354252
+#6 12.17 checking for icc... no
+2025-Oct-07 03:40:41.354252
+#6 12.18 checking for suncc... no
+2025-Oct-07 03:40:41.354252
+#6 12.19 checking for system library directory... lib
+2025-Oct-07 03:40:41.354252
+#6 12.19 checking if compiler supports -Wl,-rpath,... yes
+2025-Oct-07 03:40:41.354252
+#6 12.23 checking build system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:41.354252
+#6 12.23 checking host system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:41.354252
+#6 12.23 checking target system type... x86_64-pc-linux-gnu
+2025-Oct-07 03:40:41.354252
+#6 12.26 checking for PHP prefix... /usr/local
+2025-Oct-07 03:40:41.466388
+#6 12.26 checking for PHP includes... -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib
+2025-Oct-07 03:40:41.466388
+#6 12.26 checking for PHP extension directory... /usr/local/lib/php/extensions/no-debug-non-zts-20220829
+2025-Oct-07 03:40:41.466388
+#6 12.26 checking for PHP installed headers prefix... /usr/local/include/php
+2025-Oct-07 03:40:41.466388
+#6 12.26 checking if debug is enabled... no
+2025-Oct-07 03:40:41.466388
+#6 12.28 checking if zts is enabled... no
+2025-Oct-07 03:40:41.466388
+#6 12.30 checking for gawk... no
+2025-Oct-07 03:40:41.466388
+#6 12.30 checking for nawk... nawk
+2025-Oct-07 03:40:41.466388
+#6 12.30 checking if nawk is broken... no
+2025-Oct-07 03:40:41.466388
+#6 12.30 checking for PostgreSQL support for PDO... yes, shared
+2025-Oct-07 03:40:41.466388
+#6 12.30 checking for pg_config... /usr/bin/pg_config
+2025-Oct-07 03:40:41.466388
+#6 12.31 checking for PQlibVersion in -lpq... yes
+2025-Oct-07 03:40:41.571310
+#6 12.38 checking for PDO includes... /usr/local/include/php/ext
+2025-Oct-07 03:40:41.571310
+#6 12.39 checking for a sed that does not truncate output... /usr/bin/sed
+2025-Oct-07 03:40:41.571310
+#6 12.39 checking for ld used by cc... /usr/bin/ld
+2025-Oct-07 03:40:41.571310
+#6 12.39 checking if the linker (/usr/bin/ld) is GNU ld... yes
+2025-Oct-07 03:40:41.571310
+#6 12.40 checking for /usr/bin/ld option to reload object files... -r
+2025-Oct-07 03:40:41.571310
+#6 12.40 checking for BSD-compatible nm... /usr/bin/nm -B
+2025-Oct-07 03:40:41.571310
+#6 12.40 checking whether ln -s works... yes
+2025-Oct-07 03:40:41.571310
+#6 12.40 checking how to recognize dependent libraries... pass_all
+2025-Oct-07 03:40:41.571310
+#6 12.41 checking for stdio.h... yes
+2025-Oct-07 03:40:41.571310
+#6 12.43 checking for stdlib.h... yes
+2025-Oct-07 03:40:41.571310
+#6 12.46 checking for string.h... yes
+2025-Oct-07 03:40:41.681401
+#6 12.48 checking for inttypes.h... yes
+2025-Oct-07 03:40:41.681401
+#6 12.51 checking for stdint.h... yes
+2025-Oct-07 03:40:41.681401
+#6 12.54 checking for strings.h... yes
+2025-Oct-07 03:40:41.681401
+#6 12.56 checking for sys/stat.h... yes
+2025-Oct-07 03:40:41.842501
+#6 12.59 checking for sys/types.h... yes
+2025-Oct-07 03:40:41.842501
+#6 12.62 checking for unistd.h... yes
+2025-Oct-07 03:40:41.842501
+#6 12.65 checking for dlfcn.h... yes
+2025-Oct-07 03:40:41.842501
+#6 12.68 checking the maximum length of command line arguments... 1572864
+2025-Oct-07 03:40:41.842501
+#6 12.68 checking command to parse /usr/bin/nm -B output from cc object... ok
+2025-Oct-07 03:40:41.842501
+#6 12.75 checking for objdir...
+2025-Oct-07 03:40:41.944108
+.libs
+2025-Oct-07 03:40:41.944108
+#6 12.75 checking for ar... ar
+2025-Oct-07 03:40:41.944108
+#6 12.75 checking for ranlib... ranlib
+2025-Oct-07 03:40:41.944108
+#6 12.76 checking for strip... strip
+2025-Oct-07 03:40:41.944108
+#6 12.81 checking if cc supports -fno-rtti -fno-exceptions... no
+2025-Oct-07 03:40:41.944108
+#6 12.84 checking for cc option to produce PIC... -fPIC
+2025-Oct-07 03:40:41.944108
+#6 12.84 checking if cc PIC flag -fPIC works... yes
+2025-Oct-07 03:40:42.044963
+#6 12.85 checking if cc static flag -static works... yes
+2025-Oct-07 03:40:42.044963
+#6 12.91 checking if cc supports -c -o file.o... yes
+2025-Oct-07 03:40:42.044963
+#6 12.94 checking whether the cc linker (/usr/bin/ld -m elf_x86_64) supports shared libraries... yes
+2025-Oct-07 03:40:42.196364
+#6 12.95 checking whether -lc should be explicitly linked in... no
+2025-Oct-07 03:40:42.202714
+#6 12.98 checking dynamic linker characteristics... GNU/Linux ld.so
+2025-Oct-07 03:40:42.202714
+#6 12.99 checking how to hardcode library paths into programs... immediate
+2025-Oct-07 03:40:42.202714
+#6 12.99 checking whether stripping libraries is possible... yes
+2025-Oct-07 03:40:42.202714
+#6 12.99 checking if libtool supports shared libraries... yes
+2025-Oct-07 03:40:42.202714
+#6 12.99 checking whether to build shared libraries... yes
+2025-Oct-07 03:40:42.202714
+#6 12.99 checking whether to build static libraries... no
+2025-Oct-07 03:40:42.202714
+#6 13.10
+2025-Oct-07 03:40:42.202714
+#6 13.10 creating libtool
+2025-Oct-07 03:40:42.304595
+#6 13.12 appending configuration tag "CXX" to libtool
+2025-Oct-07 03:40:42.304595
+#6 13.17 configure: patching config.h.in
+2025-Oct-07 03:40:42.304595
+#6 13.18 configure: creating ./config.status
+2025-Oct-07 03:40:42.304595
+#6 13.21 config.status: creating config.h
+2025-Oct-07 03:40:42.408977
+#6 13.24 /bin/bash /usr/src/php/ext/pdo_pgsql/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE   -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pdo_pgsql.c -o pdo_pgsql.lo  -MMD -MF pdo_pgsql.dep -MT pdo_pgsql.lo
+2025-Oct-07 03:40:42.408977
+#6 13.32 mkdir .libs
+2025-Oct-07 03:40:42.536782
+#6 13.32  cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pdo_pgsql.c -MMD -MF pdo_pgsql.dep -MT pdo_pgsql.lo  -fPIC -DPIC -o .libs/pdo_pgsql.o
+2025-Oct-07 03:40:42.536782
+#6 13.44 /bin/bash /usr/src/php/ext/pdo_pgsql/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE   -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pgsql_driver.c -o pgsql_driver.lo  -MMD -MF pgsql_driver.dep -MT pgsql_driver.lo
+2025-Oct-07 03:40:42.768711
+#6 13.53  cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pgsql_driver.c -MMD -MF pgsql_driver.dep -MT pgsql_driver.lo  -fPIC -DPIC -o .libs/pgsql_driver.o
+2025-Oct-07 03:40:43.124237
+#6 14.03 /bin/bash /usr/src/php/ext/pdo_pgsql/libtool --tag=CC --mode=compile cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE   -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pgsql_statement.c -o pgsql_statement.lo  -MMD -MF pgsql_statement.dep -MT pgsql_statement.lo
+2025-Oct-07 03:40:43.373741
+#6 14.13  cc -I. -I/usr/src/php/ext/pdo_pgsql -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I/usr/local/include/php/ext -DZEND_COMPILE_DL_EXT=1 -c /usr/src/php/ext/pdo_pgsql/pgsql_statement.c -MMD -MF pgsql_statement.dep -MT pgsql_statement.lo  -fPIC -DPIC -o .libs/pgsql_statement.o
+2025-Oct-07 03:40:43.501149
+#6 14.41 /bin/bash /usr/src/php/ext/pdo_pgsql/libtool --tag=CC --mode=link cc -shared -I/usr/src/php/ext/pdo_pgsql/include -I/usr/src/php/ext/pdo_pgsql/main -I/usr/src/php/ext/pdo_pgsql -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/TSRM -I/usr/local/include/php/Zend -I/usr/local/include/php/ext -I/usr/local/include/php/ext/date/lib -I/usr/include/postgresql  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DHAVE_CONFIG_H  -fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE  -Wl,-O1 -pie  -o pdo_pgsql.la -export-dynamic -avoid-version -prefer-pic -module -rpath /usr/src/php/ext/pdo_pgsql/modules  pdo_pgsql.lo pgsql_driver.lo pgsql_statement.lo -Wl,-rpath,/usr/lib/x86_64-linux-gnu -L/usr/lib/x86_64-linux-gnu -lpq
+2025-Oct-07 03:40:43.610437
+#6 14.50 cc -shared  .libs/pdo_pgsql.o .libs/pgsql_driver.o .libs/pgsql_statement.o  -L/usr/lib/x86_64-linux-gnu -lpq  -Wl,-O1 -Wl,-rpath -Wl,/usr/lib/x86_64-linux-gnu -Wl,-soname -Wl,pdo_pgsql.so -o .libs/pdo_pgsql.so
+2025-Oct-07 03:40:43.610437
+#6 14.52 creating pdo_pgsql.la
+2025-Oct-07 03:40:43.711883
+#6 14.52 (cd .libs && rm -f pdo_pgsql.la && ln -s ../pdo_pgsql.la pdo_pgsql.la)
+2025-Oct-07 03:40:43.711883
+#6 14.53 /bin/bash /usr/src/php/ext/pdo_pgsql/libtool --tag=CC --mode=install cp ./pdo_pgsql.la /usr/src/php/ext/pdo_pgsql/modules
+2025-Oct-07 03:40:43.711883
+#6 14.55 cp ./.libs/pdo_pgsql.so /usr/src/php/ext/pdo_pgsql/modules/pdo_pgsql.so
+2025-Oct-07 03:40:43.711883
+#6 14.55 cp ./.libs/pdo_pgsql.lai /usr/src/php/ext/pdo_pgsql/modules/pdo_pgsql.la
+2025-Oct-07 03:40:43.711883
+#6 14.57 PATH="$PATH:/sbin" ldconfig -n /usr/src/php/ext/pdo_pgsql/modules
+2025-Oct-07 03:40:43.711883
+#6 14.57 ----------------------------------------------------------------------
+2025-Oct-07 03:40:43.711883
+#6 14.57 Libraries have been installed in:
+2025-Oct-07 03:40:43.711883
+#6 14.57    /usr/src/php/ext/pdo_pgsql/modules
+2025-Oct-07 03:40:43.711883
+#6 14.57
+2025-Oct-07 03:40:43.711883
+#6 14.57 If you ever happen to want to link against installed libraries
+2025-Oct-07 03:40:43.711883
+#6 14.57 in a given directory, LIBDIR, you must either use libtool, and
+2025-Oct-07 03:40:43.711883
+#6 14.57 specify the full pathname of the library, or use the `-LLIBDIR'
+2025-Oct-07 03:40:43.711883
+#6 14.57 flag during linking and do at least one of the following:
+2025-Oct-07 03:40:43.711883
+#6 14.57    - add LIBDIR to the `LD_LIBRARY_PATH' environment variable
+2025-Oct-07 03:40:43.711883
+#6 14.58      during execution
+2025-Oct-07 03:40:43.711883
+#6 14.58    - add LIBDIR to the `LD_RUN_PATH' environment variable
+2025-Oct-07 03:40:43.711883
+#6 14.58      during linking
+2025-Oct-07 03:40:43.711883
+#6 14.58    - use the `-Wl,--rpath -Wl,LIBDIR' linker flag
+2025-Oct-07 03:40:43.711883
+#6 14.58    - have your system administrator add LIBDIR to `/etc/ld.so.conf'
+2025-Oct-07 03:40:43.711883
+#6 14.58
+2025-Oct-07 03:40:43.711883
+#6 14.58 See any operating system documentation about shared libraries for
+2025-Oct-07 03:40:43.711883
+#6 14.58 more information, such as the ld(1) and ld.so(8) manual pages.
+2025-Oct-07 03:40:43.711883
+#6 14.58 ----------------------------------------------------------------------
+2025-Oct-07 03:40:43.711883
+#6 14.58
+2025-Oct-07 03:40:43.711883
+#6 14.58 Build complete.
+2025-Oct-07 03:40:43.711883
+#6 14.58 Don't forget to run 'make test'.
+2025-Oct-07 03:40:43.711883
+#6 14.58
+2025-Oct-07 03:40:43.711883
+#6 14.60 + strip --strip-all modules/pdo_pgsql.so
+2025-Oct-07 03:40:43.711883
+#6 14.62 Installing shared extensions:     /usr/local/lib/php/extensions/no-debug-non-zts-20220829/
+2025-Oct-07 03:40:43.950776
+#6 14.69 find . -name \*.gcno -o -name \*.gcda | xargs rm -f
+2025-Oct-07 03:40:43.950776
+#6 14.69 find . -name \*.lo -o -name \*.o -o -name \*.dep | xargs rm -f
+2025-Oct-07 03:40:43.950776
+#6 14.69 find . -name \*.la -o -name \*.a | xargs rm -f
+2025-Oct-07 03:40:43.950776
+#6 14.70 find . -name \*.so | xargs rm -f
+2025-Oct-07 03:40:43.950776
+#6 14.70 find . -name .libs -a -type d|xargs rm -rf
+2025-Oct-07 03:40:43.950776
+#6 14.70 rm -f libphp.la      modules/* libs/*
+2025-Oct-07 03:40:43.950776
+#6 14.70 rm -f ext/opcache/jit/zend_jit_x86.c
+2025-Oct-07 03:40:43.950776
+#6 14.71 rm -f ext/opcache/jit/zend_jit_arm64.c
+2025-Oct-07 03:40:43.950776
+#6 14.71 rm -f ext/opcache/minilua
+2025-Oct-07 03:40:44.296635
+#6 DONE 15.2s
+2025-Oct-07 03:40:44.457353
+#7 [3/4] WORKDIR /app
+2025-Oct-07 03:40:44.457353
+#7 DONE 0.0s
+2025-Oct-07 03:40:44.457353
+2025-Oct-07 03:40:44.457353
+#8 [4/4] COPY . /app
+2025-Oct-07 03:40:44.457353
+#8 DONE 0.0s
+2025-Oct-07 03:40:44.457353
+2025-Oct-07 03:40:44.457353
+#9 exporting to image
+2025-Oct-07 03:40:44.457353
+#9 exporting layers 0.1s done
+2025-Oct-07 03:40:44.496780
+#9 writing image sha256:6c127d06c12793275d5b1bbe2d1bae146badb26548e6eb2a2df2021b3a10827f done
+2025-Oct-07 03:40:44.496780
+#9 naming to docker.io/library/ngg0cow008g8g4ko8ow808o8:244db0f640fe53a7e73571b8f1a6ce5927de913d done
+2025-Oct-07 03:40:44.496780
+#9 DONE 0.1s
+2025-Oct-07 03:40:44.515734
+Building docker image completed.
+2025-Oct-07 03:40:44.535148
+----------------------------------------
+2025-Oct-07 03:40:44.546250
+Rolling update started.
+2025-Oct-07 03:40:45.089148
+[CMD]: docker exec xosg8g848w844g8c8sgwggko bash -c 'SOURCE_COMMIT=244db0f640fe53a7e73571b8f1a6ce5927de913d COOLIFY_URL=http://ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,https//crm.koaditech.com COOLIFY_FQDN=ngg0cow008g8g4ko8ow808o8.178.156.183.51.sslip.io,https COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=ngg0cow008g8g4ko8ow808o8 COOLIFY_CONTAINER_NAME=ngg0cow008g8g4ko8ow808o8-034024473384  docker compose --project-name ngg0cow008g8g4ko8ow808o8 --project-directory /artifacts/xosg8g848w844g8c8sgwggko -f /artifacts/xosg8g848w844g8c8sgwggko/docker-compose.yaml up --build -d'
+2025-Oct-07 03:40:45.089148
+time="2025-10-07T03:40:45Z" level=warning msg="Found orphan containers ([ngg0cow008g8g4ko8ow808o8-033355853194]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+2025-Oct-07 03:40:45.094332
+Container ngg0cow008g8g4ko8ow808o8-034024473384  Creating
+2025-Oct-07 03:40:45.128777
+ngg0cow008g8g4ko8ow808o8-034024473384 Your kernel does not support memory swappiness capabilities or the cgroup is not mounted. Memory swappiness discarded.
+2025-Oct-07 03:40:45.133576
+Container ngg0cow008g8g4ko8ow808o8-034024473384  Created
+2025-Oct-07 03:40:45.133576
+Container ngg0cow008g8g4ko8ow808o8-034024473384  Starting
+2025-Oct-07 03:40:45.310407
+Container ngg0cow008g8g4ko8ow808o8-034024473384  Started
+2025-Oct-07 03:40:45.333598
+New container started.
+2025-Oct-07 03:40:45.343139
+Removing old containers.
+2025-Oct-07 03:40:45.601689
+[CMD]: docker stop --time=30 ngg0cow008g8g4ko8ow808o8-033355853194
+2025-Oct-07 03:40:45.601689
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-07 03:41:15.716730
+ngg0cow008g8g4ko8ow808o8-033355853194
+2025-Oct-07 03:41:15.848718
+[CMD]: docker rm -f ngg0cow008g8g4ko8ow808o8-033355853194
+2025-Oct-07 03:41:15.848718
+ngg0cow008g8g4ko8ow808o8-033355853194
+2025-Oct-07 03:41:15.856653
+Rolling update completed.
+2025-Oct-07 03:41:16.197407
+Gracefully shutting down build container: xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:41:16.314553
+[CMD]: docker stop --time=30 xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:41:16.314553
+Flag --time has been deprecated, use --timeout instead
+2025-Oct-07 03:41:16.456780
+xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:41:16.605467
+[CMD]: docker rm -f xosg8g848w844g8c8sgwggko
+2025-Oct-07 03:41:16.605467
+Error response from daemon: No such container: xosg8g848w844g8c8sgwggko
