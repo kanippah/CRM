@@ -146,6 +146,7 @@ function ensure_schema() {
       password TEXT NOT NULL,
       full_name TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'sales',
+      status TEXT DEFAULT 'active',
       remember_token TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     );
@@ -267,6 +268,9 @@ function ensure_schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='remember_token') THEN
         ALTER TABLE users ADD COLUMN remember_token TEXT;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='status') THEN
+        ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';
+      END IF;
     END $$;
     
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
@@ -282,6 +286,9 @@ SQL);
   
   // Update existing admin user to have email if missing
   $pdo->exec("UPDATE users SET email = 'admin@koadi.tech' WHERE username = 'admin' AND (email IS NULL OR email = '')");
+  
+  // Set all existing users to active status if NULL
+  $pdo->exec("UPDATE users SET status = 'active' WHERE status IS NULL");
 }
 
 ensure_schema();
