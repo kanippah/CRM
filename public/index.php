@@ -3146,13 +3146,16 @@ if (isset($_GET['background'])) {
       const tbody = document.querySelector('#callsTable tbody');
       tbody.innerHTML = data.items.map(c => `
         <tr>
-          <td><strong>${c.contact_name || c.contact_company || 'N/A'}</strong></td>
+          <td>
+            <a href="#" onclick="viewCallUpdates(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">
+              ${c.contact_name || c.contact_company || 'N/A'}
+            </a>
+          </td>
           <td>${new Date(c.when_at).toLocaleString()}</td>
           <td><span class="badge">${c.outcome}</span></td>
           <td>${c.duration_min || 0}</td>
           <td>${c.notes || '-'}</td>
           <td>
-            <button class="btn" onclick="viewCallUpdates(${c.id})">View Updates</button>
             <button class="btn" onclick="addCallUpdate(${c.id})">Add Update</button>
             <button class="btn" onclick="openCallForm(${c.id})">Edit</button>
             <button class="btn danger" onclick="deleteCall(${c.id})">Delete</button>
