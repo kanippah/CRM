@@ -1117,8 +1117,9 @@ function api_contacts_save() {
     $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':i' => $industry, ':u' => $now, ':id' => $id]);
     $row = $s->fetch();
   } else {
-    $s = $p->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,industry,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:i,:c,:u) RETURNING *");
-    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':i' => $industry, ':c' => $now, ':u' => $now]);
+    $user_id = $_SESSION['user_id'];
+    $s = $p->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,industry,created_at,updated_at,assigned_to) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:i,:c,:u,:a) RETURNING *");
+    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':i' => $industry, ':c' => $now, ':u' => $now, ':a' => $user_id]);
     $row = $s->fetch();
   }
   respond(['item' => $row, 'duplicate_of' => $dup ? ($dup['company'] ?: $dup['name']) : null]);
@@ -1157,7 +1158,7 @@ function api_contacts_return_to_lead() {
     respond(['error' => 'Contact not found'], 404);
   }
   
-  if ($_SESSION['role'] !== 'admin' && $contact['assigned_to'] != $user_id) {
+  if ($_SESSION['role'] !== 'admin' && $contact['assigned_to'] && $contact['assigned_to'] != $user_id) {
     respond(['error' => 'Forbidden'], 403);
   }
   
