@@ -334,6 +334,7 @@ if (isset($_GET['api'])) {
       case 'users.save': api_users_save(); break;
       case 'users.delete': api_users_delete(); break;
       case 'users.toggle_status': api_users_toggle_status(); break;
+      case 'invitations.delete': api_invitations_delete(); break;
       
       case 'leads.list': api_leads_list(); break;
       case 'leads.save': api_leads_save(); break;
@@ -748,6 +749,14 @@ function api_users_toggle_status() {
   respond(['status' => $result['status']]);
 }
 
+function api_invitations_delete() {
+  require_admin();
+  $id = (int)($_GET['id'] ?? 0);
+  $pdo = db();
+  $pdo->prepare("DELETE FROM invitations WHERE id=:id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
 function api_leads_list() {
   require_auth();
   $pdo = db();
@@ -1068,6 +1077,7 @@ function api_contacts_save() {
   $pn = preg_replace('/\s+/', '', $b['phoneNumber'] ?? '');
   $source = trim($b['source'] ?? '');
   $notes = trim($b['notes'] ?? '');
+  $industry = trim($b['industry'] ?? '');
   $now = date('c');
 
   $dup = null;
@@ -1090,12 +1100,12 @@ function api_contacts_save() {
   }
 
   if ($id) {
-    $s = $p->prepare("UPDATE contacts SET type=:t,company=:co,name=:n,email=:e,phone_country=:pc,phone_number=:pn,source=:s,notes=:no,updated_at=:u WHERE id=:id RETURNING *");
-    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':u' => $now, ':id' => $id]);
+    $s = $p->prepare("UPDATE contacts SET type=:t,company=:co,name=:n,email=:e,phone_country=:pc,phone_number=:pn,source=:s,notes=:no,industry=:i,updated_at=:u WHERE id=:id RETURNING *");
+    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':i' => $industry, ':u' => $now, ':id' => $id]);
     $row = $s->fetch();
   } else {
-    $s = $p->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u) RETURNING *");
-    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':c' => $now, ':u' => $now]);
+    $s = $p->prepare("INSERT INTO contacts (type,company,name,email,phone_country,phone_number,source,notes,industry,created_at,updated_at) VALUES (:t,:co,:n,:e,:pc,:pn,:s,:no,:i,:c,:u) RETURNING *");
+    $s->execute([':t' => $type, ':co' => $company, ':n' => $name, ':e' => $email, ':pc' => $pc, ':pn' => $pn, ':s' => $source, ':no' => $notes, ':i' => $industry, ':c' => $now, ':u' => $now]);
     $row = $s->fetch();
   }
   respond(['item' => $row, 'duplicate_of' => $dup ? ($dup['company'] ?: $dup['name']) : null]);
@@ -2206,6 +2216,7 @@ if (isset($_GET['background'])) {
                 <th>Phone</th>
                 <th>Email</th>
                 <th>Company</th>
+                <th>Industry</th>
                 <th>Address</th>
                 <th>Status</th>
                 <th>Assigned To</th>
@@ -2231,7 +2242,7 @@ if (isset($_GET['background'])) {
       const tbody = document.querySelector('#leadsTable tbody');
       
       if (data.items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted);">No leads found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted);">No leads found</td></tr>';
         return;
       }
       
@@ -2240,24 +2251,23 @@ if (isset($_GET['background'])) {
         const canGrab = currentUser.role === 'sales' && isGlobal;
         const canView = currentUser.role === 'admin' || lead.assigned_to == currentUser.id;
         const isHidden = lead.email === '***';
-        const displayName = isGlobal && lead.company ? lead.company : lead.name;
+        const displayName = lead.name;
+        const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
         return `
           <tr>
-            <td><strong>${displayName}</strong></td>
+            <td>${nameDisplay}</td>
             <td>${isHidden ? '***' : lead.phone}</td>
             <td>${lead.email}</td>
             <td>${lead.company || '-'}</td>
+            <td>${lead.industry || '-'}</td>
             <td>${isHidden ? '***' : lead.address}</td>
             <td><span class="badge ${lead.status}">${lead.status}</span></td>
             <td>${lead.assigned_name || '-'}</td>
             <td>
               ${canGrab ? `<button class="btn success" onclick="grabLead(${lead.id})">Grab</button>` : ''}
               ${canView && !isHidden ? `<button class="btn secondary" onclick="viewLead(${lead.id})">View</button>` : ''}
-              ${canView && !isHidden ? `<button class="btn" style="background: #FF8C42;" onclick="convertLeadToContact(${lead.id})">Convert to Contact</button>` : ''}
-              ${currentUser.role === 'admin' ? `<button class="btn" onclick="openLeadForm(${lead.id})">Edit</button>` : ''}
-              ${currentUser.role === 'admin' ? `<button class="btn" onclick="openAssignModal(${lead.id})">Assign</button>` : ''}
-              ${currentUser.role === 'admin' ? `<button class="btn danger" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
+              ${canView && !isHidden && currentUser.role === 'sales' ? `<button class="btn" style="background: #FF8C42;" onclick="convertLeadToContact(${lead.id})">Convert to Contact</button>` : ''}
             </td>
           </tr>
         `;
@@ -2342,9 +2352,19 @@ if (isset($_GET['background'])) {
       if (!lead) return;
       
       const interactions = await api(`interactions.list&lead_id=${id}`);
+      const isAdmin = currentUser.role === 'admin';
+      
+      const adminActions = isAdmin ? `
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
+          <button class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>
+          <button class="btn" onclick="closeModal(); openAssignModal(${id});">Assign</button>
+          <button class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>
+        </div>
+      ` : '';
       
       showModal(`
         <h3>${lead.name}</h3>
+        ${adminActions}
         <div class="form-group">
           <label>Phone:</label>
           <div>${lead.phone}</div>
@@ -2356,6 +2376,10 @@ if (isset($_GET['background'])) {
         <div class="form-group">
           <label>Company:</label>
           <div>${lead.company || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Industry:</label>
+          <div>${lead.industry || '-'}</div>
         </div>
         <div class="form-group">
           <label>Address:</label>
@@ -2410,18 +2434,18 @@ if (isset($_GET['background'])) {
       }
     }
     
-    function openLeadForm(id = null) {
+    async function openLeadForm(id = null) {
+      const industries = await api('industries.list');
       if (id) {
-        api(`leads.list&q=`).then(data => {
-          const lead = data.items.find(l => l.id === id);
-          showLeadForm(lead);
-        });
+        const data = await api(`leads.list&q=`);
+        const lead = data.items.find(l => l.id === id);
+        showLeadForm(lead, industries.items);
       } else {
-        showLeadForm(null);
+        showLeadForm(null, industries.items);
       }
     }
     
-    function showLeadForm(lead) {
+    function showLeadForm(lead, industries) {
       showModal(`
         <h3>${lead ? 'Edit Lead' : 'Add Lead'}</h3>
         <form onsubmit="saveLead(event, ${lead ? lead.id : 'null'})">
@@ -2442,6 +2466,13 @@ if (isset($_GET['background'])) {
             <input type="text" name="company" value="${lead?.company || ''}">
           </div>
           <div class="form-group">
+            <label>Industry</label>
+            <select name="industry">
+              <option value="">Select Industry</option>
+              ${industries.map(i => `<option value="${i.name}" ${lead?.industry === i.name ? 'selected' : ''}>${i.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
             <label>Address</label>
             <textarea name="address">${lead?.address || ''}</textarea>
           </div>
@@ -2460,6 +2491,7 @@ if (isset($_GET['background'])) {
         phone: form.phone.value,
         email: form.email.value,
         company: form.company.value,
+        industry: form.industry.value,
         address: form.address.value
       };
       
@@ -2569,7 +2601,10 @@ if (isset($_GET['background'])) {
               <td><span class="badge ${item.role}">${item.role}</span></td>
               <td><span class="badge" style="background: var(--kt-yellow); color: #000;">Invited</span></td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
-              <td><em>Expires: ${new Date(item.expires_at).toLocaleDateString()}</em></td>
+              <td>
+                <em>Expires: ${new Date(item.expires_at).toLocaleDateString()}</em>
+                <button class="btn danger" onclick="deleteInvitation(${item.id})" style="margin-left: 8px;">Delete</button>
+              </td>
             </tr>
           `;
         } else {
@@ -2604,6 +2639,16 @@ if (isset($_GET['background'])) {
           method: 'POST',
           body: JSON.stringify({ id })
         });
+        await loadUsers();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function deleteInvitation(id) {
+      if (!confirm('Delete this pending invitation?')) return;
+      try {
+        await api(`invitations.delete&id=${id}`, { method: 'DELETE' });
         await loadUsers();
       } catch (e) {
         alert('Error: ' + e.message);
