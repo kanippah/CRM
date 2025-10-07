@@ -45,16 +45,57 @@ function normalize_phone($country, $number) {
 function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
-  $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
-  $headers .= "Reply-To: {$SMTP_USER}\r\n";
-  $headers .= "MIME-Version: 1.0\r\n";
-  $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-  
-  ini_set('SMTP', $SMTP_HOST);
-  ini_set('smtp_port', $SMTP_PORT);
-  ini_set('sendmail_from', $SMTP_USER);
-  
-  return mail($to, $subject, $message, $headers);
+  try {
+    $socket = fsockopen('ssl://' . $SMTP_HOST, $SMTP_PORT, $errno, $errstr, 30);
+    if (!$socket) {
+      error_log("SMTP connection failed: $errstr ($errno)");
+      return false;
+    }
+    
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "AUTH LOGIN\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, base64_encode($SMTP_USER) . "\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, base64_encode($SMTP_PASS) . "\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "MAIL FROM: <{$SMTP_USER}>\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "RCPT TO: <{$to}>\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "DATA\r\n");
+    $response = fgets($socket, 515);
+    
+    $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
+    $headers .= "Reply-To: {$SMTP_USER}\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "Subject: {$subject}\r\n";
+    
+    fputs($socket, "To: {$to}\r\n");
+    fputs($socket, $headers);
+    fputs($socket, "\r\n");
+    fputs($socket, $message . "\r\n");
+    fputs($socket, ".\r\n");
+    $response = fgets($socket, 515);
+    
+    fputs($socket, "QUIT\r\n");
+    fclose($socket);
+    
+    return true;
+  } catch (Exception $e) {
+    error_log("Email sending failed: " . $e->getMessage());
+    return false;
+  }
 }
 
 function ensure_schema() {
