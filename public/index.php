@@ -48,6 +48,8 @@ function normalize_phone($country, $number) {
 function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
+  error_log("SMTP: Attempting to connect to {$SMTP_HOST}:{$SMTP_PORT}");
+  
   $context = stream_context_create([
     'ssl' => [
       'verify_peer' => false,
@@ -66,31 +68,48 @@ function send_email($to, $subject, $message) {
   );
   
   if (!$socket) {
+    error_log("SMTP: Connection failed - errno: {$errno}, error: {$errstr}");
     return false;
   }
   
+  error_log("SMTP: Connected successfully");
+  
   $response = fgets($socket, 515);
+  error_log("SMTP: Server greeting: " . trim($response));
   
   fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: EHLO response: " . trim($response));
   
   fputs($socket, "AUTH LOGIN\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: AUTH LOGIN response: " . trim($response));
   
   fputs($socket, base64_encode($SMTP_USER) . "\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: Username response: " . trim($response));
   
   fputs($socket, base64_encode($SMTP_PASS) . "\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: Password response: " . trim($response));
+  
+  if (strpos($response, '235') === false) {
+    error_log("SMTP: Authentication failed!");
+    fclose($socket);
+    return false;
+  }
   
   fputs($socket, "MAIL FROM: <{$SMTP_USER}>\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: MAIL FROM response: " . trim($response));
   
   fputs($socket, "RCPT TO: <{$to}>\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: RCPT TO response: " . trim($response));
   
   fputs($socket, "DATA\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: DATA response: " . trim($response));
   
   $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
   $headers .= "Reply-To: {$SMTP_USER}\r\n";
@@ -104,10 +123,12 @@ function send_email($to, $subject, $message) {
   fputs($socket, $message . "\r\n");
   fputs($socket, ".\r\n");
   $response = fgets($socket, 515);
+  error_log("SMTP: Send response: " . trim($response));
   
   fputs($socket, "QUIT\r\n");
   fclose($socket);
   
+  error_log("SMTP: Email sent successfully to {$to}");
   return true;
 }
 
