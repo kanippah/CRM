@@ -7,6 +7,11 @@ $DB_NAME = getenv('PGDATABASE') ?: 'crmdb';
 $DB_USER = getenv('PGUSER') ?: 'crmuser';
 $DB_PASS = getenv('PGPASSWORD') ?: 'crmStongpassword';
 
+$SMTP_HOST = getenv('SMTP_HOST') ?: 'mail.koaditech.com';
+$SMTP_PORT = getenv('SMTP_PORT') ?: '465';
+$SMTP_USER = getenv('SMTP_USER') ?: 'help@koaditech.com';
+$SMTP_PASS = getenv('SMTP_PASS') ?: 'Men4patj@3112';
+
 header_remove('X-Powered-By');
 
 function db() {
@@ -35,6 +40,21 @@ function body_json() {
 
 function normalize_phone($country, $number) {
   return preg_replace('/\D+/', '', ($country ?? '') . ($number ?? ''));
+}
+
+function send_email($to, $subject, $message) {
+  global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
+  
+  $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
+  $headers .= "Reply-To: {$SMTP_USER}\r\n";
+  $headers .= "MIME-Version: 1.0\r\n";
+  $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+  
+  ini_set('SMTP', $SMTP_HOST);
+  ini_set('smtp_port', $SMTP_PORT);
+  ini_set('sendmail_from', $SMTP_USER);
+  
+  return mail($to, $subject, $message, $headers);
 }
 
 function ensure_schema() {
@@ -126,6 +146,14 @@ function ensure_schema() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    
     CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (LOWER(BTRIM(COALESCE(company,''))));
@@ -176,6 +204,8 @@ if (isset($_GET['api'])) {
       case 'login': api_login(); break;
       case 'logout': api_logout(); break;
       case 'session': api_session(); break;
+      case 'forgot_password': api_forgot_password(); break;
+      case 'reset_password': api_reset_password(); break;
       
       case 'users.list': api_users_list(); break;
       case 'users.save': api_users_save(); break;
@@ -242,6 +272,7 @@ function api_login() {
   $b = body_json();
   $email = trim($b['email'] ?? '');
   $password = $b['password'] ?? '';
+  $remember_me = $b['remember_me'] ?? false;
   
   // Validate email format
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -259,6 +290,15 @@ function api_login() {
     $_SESSION['email'] = $user['email'];
     $_SESSION['full_name'] = $user['full_name'];
     $_SESSION['role'] = $user['role'];
+    
+    // Handle remember me
+    if ($remember_me) {
+      $token = bin2hex(random_bytes(32));
+      $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
+        ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
+      setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
+    }
+    
     respond(['ok' => true, 'user' => [
       'id' => $user['id'],
       'username' => $user['username'],
@@ -272,6 +312,12 @@ function api_login() {
 }
 
 function api_logout() {
+  if (isset($_SESSION['user_id'])) {
+    $pdo = db();
+    $pdo->prepare("UPDATE users SET remember_token = NULL WHERE id = :id")
+      ->execute([':id' => $_SESSION['user_id']]);
+  }
+  setcookie('remember_token', '', time() - 3600, '/', '', true, true);
   session_destroy();
   respond(['ok' => true]);
 }
@@ -284,9 +330,100 @@ function api_session() {
       'full_name' => $_SESSION['full_name'],
       'role' => $_SESSION['role']
     ]]);
-  } else {
-    respond(['user' => null]);
+  } elseif (isset($_COOKIE['remember_token'])) {
+    $pdo = db();
+    $stmt = $pdo->query("SELECT * FROM users WHERE remember_token IS NOT NULL");
+    $users = $stmt->fetchAll();
+    
+    foreach ($users as $user) {
+      if (password_verify($_COOKIE['remember_token'], $user['remember_token'])) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['email'] = $user['email'];
+        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['role'] = $user['role'];
+        
+        respond(['user' => [
+          'id' => $user['id'],
+          'username' => $user['username'],
+          'full_name' => $user['full_name'],
+          'role' => $user['role']
+        ]]);
+      }
+    }
   }
+  respond(['user' => null]);
+}
+
+function api_forgot_password() {
+  $b = body_json();
+  $email = trim($b['email'] ?? '');
+  
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['error' => 'Invalid email format'], 400);
+  }
+  
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:e)");
+  $stmt->execute([':e' => $email]);
+  $user = $stmt->fetch();
+  
+  if ($user) {
+    $token = bin2hex(random_bytes(32));
+    $expires_at = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+    
+    $pdo->prepare("DELETE FROM password_resets WHERE email = :email")->execute([':email' => $email]);
+    $pdo->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (:email, :token, :expires)")
+      ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT), ':expires' => $expires_at]);
+    
+    $reset_link = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . "?reset_token={$token}";
+    
+    $message = "
+      <html>
+      <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
+        <h2 style='color: #0066CC;'>Password Reset Request</h2>
+        <p>Hello {$user['full_name']},</p>
+        <p>We received a request to reset your password for your Koadi Technology CRM account.</p>
+        <p>Click the link below to reset your password (link expires in 1 hour):</p>
+        <p><a href='{$reset_link}' style='background: #0066CC; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Reset Password</a></p>
+        <p>Or copy and paste this link into your browser:<br>{$reset_link}</p>
+        <p>If you didn't request this, please ignore this email.</p>
+        <p>Best regards,<br>Koadi Technology Team</p>
+      </body>
+      </html>
+    ";
+    
+    send_email($email, 'Password Reset - Koadi Technology CRM', $message);
+  }
+  
+  respond(['ok' => true, 'message' => 'If the email exists, a reset link has been sent']);
+}
+
+function api_reset_password() {
+  $b = body_json();
+  $token = $b['token'] ?? '';
+  $new_password = $b['password'] ?? '';
+  
+  if (strlen($new_password) < 6) {
+    respond(['error' => 'Password must be at least 6 characters'], 400);
+  }
+  
+  $pdo = db();
+  $stmt = $pdo->query("SELECT * FROM password_resets WHERE expires_at > NOW()");
+  $resets = $stmt->fetchAll();
+  
+  foreach ($resets as $reset) {
+    if (password_verify($token, $reset['token'])) {
+      $pdo->prepare("UPDATE users SET password = :pwd WHERE LOWER(email) = LOWER(:email)")
+        ->execute([':pwd' => password_hash($new_password, PASSWORD_DEFAULT), ':email' => $reset['email']]);
+      
+      $pdo->prepare("DELETE FROM password_resets WHERE email = :email")->execute([':email' => $reset['email']]);
+      
+      respond(['ok' => true, 'message' => 'Password updated successfully']);
+    }
+  }
+  
+  respond(['error' => 'Invalid or expired reset token'], 400);
 }
 
 function api_users_list() {
@@ -1402,11 +1539,17 @@ if (isset($_GET['background'])) {
     }
     
     function renderLogin() {
+      const resetToken = new URLSearchParams(window.location.search).get('reset_token');
+      if (resetToken) {
+        renderResetPassword(resetToken);
+        return;
+      }
+      
       document.getElementById('app').innerHTML = `
         <div class="login-container">
           <div class="login-box">
             <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">Koadi Tech - CRM Login</h2>
+            <h2 style="margin-bottom: 24px;">CRM Login</h2>
             <form onsubmit="handleLogin(event)">
               <div class="form-group">
                 <input type="email" name="email" placeholder="Email" autocomplete="email" required>
@@ -1414,8 +1557,18 @@ if (isset($_GET['background'])) {
               <div class="form-group">
                 <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
               </div>
+              <div class="form-group" style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
+                <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                  <input type="checkbox" name="remember_me" style="width: auto;">
+                  <span>Remember Me</span>
+                </label>
+                <a href="#" onclick="event.preventDefault(); showForgotPassword();" style="color: var(--brand); text-decoration: none; font-size: 14px;">Forgot Password?</a>
+              </div>
               <button type="submit" class="btn" style="width: 100%;">Login</button>
             </form>
+            <p style="margin-top: 20px; color: var(--muted); font-size: 12px;">
+              Default: admin@koadi.tech / admin123
+            </p>
           </div>
         </div>
       `;
@@ -1426,6 +1579,7 @@ if (isset($_GET['background'])) {
       const form = e.target;
       const email = form.email.value.trim();
       const password = form.password.value;
+      const remember_me = form.remember_me.checked;
       
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1437,7 +1591,7 @@ if (isset($_GET['background'])) {
       try {
         await api('login', {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email, password, remember_me })
         });
         await checkSession();
       } catch (e) {
@@ -1449,6 +1603,87 @@ if (isset($_GET['background'])) {
       await api('logout', { method: 'POST' });
       currentUser = null;
       renderLogin();
+    }
+    
+    function showForgotPassword() {
+      document.getElementById('app').innerHTML = `
+        <div class="login-container">
+          <div class="login-box">
+            <img src="?logo" alt="Koadi Technology">
+            <h2 style="margin-bottom: 24px;">Forgot Password</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">Enter your email address and we'll send you a password reset link.</p>
+            <form onsubmit="handleForgotPassword(event)">
+              <div class="form-group">
+                <input type="email" name="email" placeholder="Email" autocomplete="email" required>
+              </div>
+              <button type="submit" class="btn" style="width: 100%;">Send Reset Link</button>
+              <button type="button" class="btn secondary" onclick="renderLogin()" style="width: 100%; margin-top: 12px;">Back to Login</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+    
+    async function handleForgotPassword(e) {
+      e.preventDefault();
+      const form = e.target;
+      const email = form.email.value.trim();
+      
+      try {
+        const result = await api('forgot_password', {
+          method: 'POST',
+          body: JSON.stringify({ email })
+        });
+        alert(result.message || 'Reset link sent! Please check your email.');
+        renderLogin();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    function renderResetPassword(token) {
+      document.getElementById('app').innerHTML = `
+        <div class="login-container">
+          <div class="login-box">
+            <img src="?logo" alt="Koadi Technology">
+            <h2 style="margin-bottom: 24px;">Reset Password</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">Enter your new password below.</p>
+            <form onsubmit="handleResetPassword(event, '${token}')">
+              <div class="form-group">
+                <input type="password" name="password" placeholder="New Password (min 6 characters)" required minlength="6">
+              </div>
+              <div class="form-group">
+                <input type="password" name="confirm_password" placeholder="Confirm New Password" required minlength="6">
+              </div>
+              <button type="submit" class="btn" style="width: 100%;">Reset Password</button>
+              <button type="button" class="btn secondary" onclick="window.location.href = window.location.origin;" style="width: 100%; margin-top: 12px;">Back to Login</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+    
+    async function handleResetPassword(e, token) {
+      e.preventDefault();
+      const form = e.target;
+      const password = form.password.value;
+      const confirmPassword = form.confirm_password.value;
+      
+      if (password !== confirmPassword) {
+        alert('Passwords do not match!');
+        return;
+      }
+      
+      try {
+        const result = await api('reset_password', {
+          method: 'POST',
+          body: JSON.stringify({ token, password })
+        });
+        alert(result.message || 'Password reset successful! Please login with your new password.');
+        window.location.href = window.location.origin;
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
     
     function toggleTheme() {
