@@ -2844,6 +2844,8 @@ if (isset($_GET['background'])) {
     async function renderContacts() {
       await loadCountries();
       CONTACTS = (await api('contacts.list')).items;
+      const isAdmin = currentUser.role === 'admin';
+      
       document.getElementById('view-contacts').innerHTML = `
         <div class="toolbar">
           <button class="btn" onclick="openContactForm()">+ New Contact</button>
@@ -2852,7 +2854,17 @@ if (isset($_GET['background'])) {
         <div class="card">
           <table id="contactsTable">
             <thead>
-              <tr><th>Name</th><th>Company</th><th>Type</th><th>Phone</th><th>Email</th><th>Source</th><th>Actions</th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Type</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Industry</th>
+                ${isAdmin ? '<th>Assigned To</th>' : ''}
+                <th>Source</th>
+                <th>Actions</th>
+              </tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -2865,27 +2877,43 @@ if (isset($_GET['background'])) {
       const q = document.getElementById('contactSearch')?.value || '';
       const data = await api(`contacts.list&q=${encodeURIComponent(q)}`);
       CONTACTS = data.items;
+      const isAdmin = currentUser.role === 'admin';
       const tbody = document.querySelector('#contactsTable tbody');
-      tbody.innerHTML = data.items.map(c => `
-        <tr>
-          <td><strong>${c.name || '(no name)'}</strong></td>
-          <td>${c.company || '-'}</td>
-          <td>${c.type || 'Individual'}</td>
-          <td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td>
-          <td>${c.email || '-'}</td>
-          <td>${c.source || '-'}</td>
-          <td>
-            <button class="btn" onclick="openCallFormForContact(${c.id})">Call</button>
-            <button class="btn" onclick="openProjectFormForContact(${c.id})">Project</button>
-            <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
-            <button class="btn danger" onclick="deleteContact(${c.id})">Delete</button>
-          </td>
-        </tr>
-      `).join('');
+      
+      tbody.innerHTML = data.items.map(c => {
+        const nameDisplay = isAdmin 
+          ? `<a href="#" onclick="viewContact(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${c.name || '(no name)'}</a>`
+          : `<strong>${c.name || '(no name)'}</strong>`;
+        
+        const actions = isAdmin 
+          ? `<button class="btn" onclick="openContactReassignModal(${c.id})">Reassign</button>
+             <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
+             <button class="btn danger" onclick="deleteContact(${c.id})">Delete</button>`
+          : `<button class="btn" onclick="openCallFormForContact(${c.id})">Call</button>
+             <button class="btn" onclick="openProjectFormForContact(${c.id})">Project</button>
+             <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
+             <button class="btn danger" onclick="deleteContact(${c.id})">Delete</button>`;
+        
+        return `
+          <tr>
+            <td>${nameDisplay}</td>
+            <td>${c.company || '-'}</td>
+            <td>${c.type || 'Individual'}</td>
+            <td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td>
+            <td>${c.email || '-'}</td>
+            <td>${c.industry || '-'}</td>
+            ${isAdmin ? `<td>${c.assigned_user || '<em style="color: var(--muted);">Unassigned</em>'}</td>` : ''}
+            <td>${c.source || '-'}</td>
+            <td>${actions}</td>
+          </tr>
+        `;
+      }).join('');
     }
     
-    function openContactForm(id = null) {
+    async function openContactForm(id = null) {
       const contact = id ? CONTACTS.find(c => c.id === id) : null;
+      const industries = await api('industries.list');
+      
       showModal(`
         <h3>${contact ? 'Edit Contact' : 'New Contact'}</h3>
         <form onsubmit="saveContact(event, ${id})">
@@ -2920,6 +2948,13 @@ if (isset($_GET['background'])) {
             <input type="text" name="phoneNumber" value="${contact?.phone_number || ''}">
           </div>
           <div class="form-group">
+            <label>Industry</label>
+            <select name="industry">
+              <option value="">Select Industry</option>
+              ${industries.items.map(i => `<option value="${i.name}" ${contact?.industry === i.name ? 'selected' : ''}>${i.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
             <label>Source</label>
             <input type="text" name="source" value="${contact?.source || ''}" placeholder="Referral, Website, etc.">
           </div>
@@ -2940,13 +2975,129 @@ if (isset($_GET['background'])) {
         id, type: form.type.value, company: form.company.value,
         name: form.name.value, email: form.email.value,
         phoneCountry: form.phoneCountry.value, phoneNumber: form.phoneNumber.value,
-        source: form.source.value, notes: form.notes.value
+        industry: form.industry.value, source: form.source.value, notes: form.notes.value
       };
       try {
         const result = await api('contacts.save', { method: 'POST', body: JSON.stringify(data) });
         if (result.duplicate_of) {
           alert(`Warning: This contact might be a duplicate of "${result.duplicate_of}"`);
         }
+        closeModal();
+        await loadContacts();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function viewContact(id) {
+      const contact = CONTACTS.find(c => c.id === id);
+      if (!contact) return;
+      
+      const calls = await api(`calls.list`);
+      const contactCalls = calls.items.filter(c => c.contact_id === id);
+      const projects = await api(`projects.list`);
+      const contactProjects = projects.items.filter(p => p.contact_id === id);
+      
+      showModal(`
+        <h3>${contact.name || '(no name)'}</h3>
+        <div class="form-group">
+          <label>Type:</label>
+          <div>${contact.type || 'Individual'}</div>
+        </div>
+        <div class="form-group">
+          <label>Company:</label>
+          <div>${contact.company || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Email:</label>
+          <div>${contact.email || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Phone:</label>
+          <div>${(contact.phone_country || '') + ' ' + (contact.phone_number || '') || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Industry:</label>
+          <div>${contact.industry || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Source:</label>
+          <div>${contact.source || '-'}</div>
+        </div>
+        <div class="form-group">
+          <label>Assigned To:</label>
+          <div>${contact.assigned_user || '<em style="color: var(--muted);">Unassigned</em>'}</div>
+        </div>
+        <div class="form-group">
+          <label>Notes:</label>
+          <div>${contact.notes || '-'}</div>
+        </div>
+        
+        <h4 style="margin-top: 24px; margin-bottom: 12px;">Call History (${contactCalls.length})</h4>
+        ${contactCalls.length > 0 ? `
+          <div style="max-height: 200px; overflow-y: auto;">
+            ${contactCalls.map(c => `
+              <div class="history-item">
+                <div class="type">${c.outcome}</div>
+                <div class="time">${new Date(c.when_at).toLocaleString()} - ${c.duration_minutes || 0} min</div>
+                <div style="margin-top: 8px;">${c.notes || '-'}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p style="color: var(--muted);">No calls yet</p>'}
+        
+        <h4 style="margin-top: 24px; margin-bottom: 12px;">Projects (${contactProjects.length})</h4>
+        ${contactProjects.length > 0 ? `
+          <div style="max-height: 200px; overflow-y: auto;">
+            ${contactProjects.map(p => `
+              <div class="history-item">
+                <div class="type">${p.title}</div>
+                <div class="time">Stage: ${p.stage} - Value: $${p.value || 0}</div>
+                <div style="margin-top: 8px;">${p.description || '-'}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p style="color: var(--muted);">No projects yet</p>'}
+        
+        <div style="margin-top: 20px;">
+          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+        </div>
+      `);
+    }
+    
+    async function openContactReassignModal(id) {
+      const contact = CONTACTS.find(c => c.id === id);
+      if (!contact) return;
+      
+      const users = await api('users.list');
+      const activeUsers = users.items.filter(u => u.type !== 'invite' && u.status === 'active');
+      
+      showModal(`
+        <h3>Reassign Contact: ${contact.name}</h3>
+        <form onsubmit="reassignContact(event, ${id})">
+          <div class="form-group">
+            <label>Assign To</label>
+            <select name="userId" required>
+              <option value="">Unassign</option>
+              ${activeUsers.map(u => `<option value="${u.id}" ${contact.assigned_to === u.id ? 'selected' : ''}>${u.full_name} (${u.email})</option>`).join('')}
+            </select>
+          </div>
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function reassignContact(e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const userId = form.userId.value || null;
+      
+      try {
+        await api('contacts.reassign', {
+          method: 'POST',
+          body: JSON.stringify({ id, userId })
+        });
         closeModal();
         await loadContacts();
       } catch (e) {
