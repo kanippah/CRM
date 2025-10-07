@@ -1945,7 +1945,7 @@ if (isset($_GET['background'])) {
     let currentView = 'leads';
     let currentLeadTab = localStorage.getItem('crm_lead_tab') || 'global';
     let currentLeadPage = parseInt(localStorage.getItem('crm_lead_page')) || 1;
-    let leadsPerPage = 20;
+    let leadsPerPage = parseInt(localStorage.getItem('crm_leads_per_page')) || 20;
     let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
@@ -2347,6 +2347,14 @@ if (isset($_GET['background'])) {
       loadLeads();
     }
     
+    function changeLeadsPerPage(perPage) {
+      leadsPerPage = parseInt(perPage);
+      localStorage.setItem('crm_leads_per_page', perPage);
+      currentLeadPage = 1;
+      localStorage.setItem('crm_lead_page', '1');
+      loadLeads();
+    }
+    
     async function loadLeads() {
       const search = document.getElementById('leadSearch')?.value || '';
       const data = await api(`leads.list&q=${encodeURIComponent(search)}&type=${currentLeadTab}&industry=${encodeURIComponent(currentLeadIndustry)}&page=${currentLeadPage}&limit=${leadsPerPage}`);
@@ -2389,7 +2397,18 @@ if (isset($_GET['background'])) {
       const totalPages = data.total_pages || 1;
       const totalCount = data.total_count || 0;
       
-      let paginationHTML = `<div style="color: var(--muted); margin-right: 15px;">Showing ${data.items.length} of ${totalCount} leads</div>`;
+      let paginationHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <label style="color: var(--muted);">Rows per page:</label>
+          <select onchange="changeLeadsPerPage(this.value)" style="padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--text);">
+            <option value="10" ${leadsPerPage === 10 ? 'selected' : ''}>10</option>
+            <option value="20" ${leadsPerPage === 20 ? 'selected' : ''}>20</option>
+            <option value="50" ${leadsPerPage === 50 ? 'selected' : ''}>50</option>
+            <option value="100" ${leadsPerPage === 100 ? 'selected' : ''}>100</option>
+          </select>
+        </div>
+        <div style="color: var(--muted); margin-right: 15px;">Showing ${data.items.length} of ${totalCount} leads</div>
+      `;
       
       if (totalPages > 1) {
         paginationHTML += '<div style="display: flex; gap: 5px;">';
