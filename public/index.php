@@ -250,6 +250,13 @@ function ensure_schema() {
       created_at TIMESTAMP DEFAULT NOW()
     );
     
+    -- Create industries table if it doesn't exist
+    CREATE TABLE IF NOT EXISTS industries (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
     -- Add assigned_to columns if they don't exist
     DO $$ 
     BEGIN
@@ -271,6 +278,12 @@ function ensure_schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='status') THEN
         ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='industry') THEN
+        ALTER TABLE leads ADD COLUMN industry TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='industry') THEN
+        ALTER TABLE contacts ADD COLUMN industry TEXT;
+      END IF;
     END $$;
     
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
@@ -289,6 +302,18 @@ SQL);
   
   // Set all existing users to active status if NULL
   $pdo->exec("UPDATE users SET status = 'active' WHERE status IS NULL");
+  
+  // Insert default industries if none exist
+  $industry_count = $pdo->query("SELECT COUNT(*) FROM industries")->fetchColumn();
+  if ($industry_count == 0) {
+    $pdo->exec("INSERT INTO industries (name) VALUES 
+      ('Technology'), ('Healthcare'), ('Finance'), ('Manufacturing'), 
+      ('Retail'), ('Real Estate'), ('Construction'), ('Education'), 
+      ('Hospitality'), ('Legal Services'), ('Marketing & Advertising'),
+      ('Transportation'), ('Food & Beverage'), ('Entertainment'),
+      ('Telecommunications'), ('Energy'), ('Agriculture'), ('Insurance'),
+      ('Consulting'), ('Other')");
+  }
 }
 
 ensure_schema();
@@ -322,6 +347,10 @@ if (isset($_GET['api'])) {
       
       case 'stats': api_stats(); break;
       case 'countries': api_countries(); break;
+      
+      case 'industries.list': api_industries_list(); break;
+      case 'industries.save': api_industries_save(); break;
+      case 'industries.delete': api_industries_delete(); break;
       
       case 'contacts.list': api_contacts_list(); break;
       case 'contacts.save': api_contacts_save(); break;
@@ -784,6 +813,7 @@ function api_leads_save() {
   $email = trim($b['email'] ?? '');
   $company = trim($b['company'] ?? '');
   $address = trim($b['address'] ?? '');
+  $industry = trim($b['industry'] ?? '');
   
   if ($_SESSION['role'] !== 'admin' && $id) {
     $check = $pdo->prepare("SELECT assigned_to FROM leads WHERE id=:id");
@@ -795,15 +825,15 @@ function api_leads_save() {
   }
   
   if ($id) {
-    $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, updated_at=now() WHERE id=:id RETURNING *");
-    $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':id' => $id]);
+    $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, industry=:i, updated_at=now() WHERE id=:id RETURNING *");
+    $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry, ':id' => $id]);
   } else {
     if ($_SESSION['role'] === 'admin') {
-      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status) VALUES (:n, :p, :e, :c, :a, 'global') RETURNING *");
-      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address]);
+      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, industry, status) VALUES (:n, :p, :e, :c, :a, :i, 'global') RETURNING *");
+      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry]);
     } else {
-      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, status, assigned_to) VALUES (:n, :p, :e, :c, :a, 'assigned', :uid) RETURNING *");
-      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':uid' => $_SESSION['user_id']]);
+      $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, industry, status, assigned_to) VALUES (:n, :p, :e, :c, :a, :i, 'assigned', :uid) RETURNING *");
+      $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry, ':uid' => $_SESSION['user_id']]);
     }
   }
   
@@ -964,6 +994,40 @@ function COUNTRIES_DATA() {
 
 function api_countries() {
   respond(['items' => COUNTRIES_DATA()]);
+}
+
+function api_industries_list() {
+  require_auth();
+  $pdo = db();
+  $industries = $pdo->query("SELECT * FROM industries ORDER BY name")->fetchAll();
+  respond(['items' => $industries]);
+}
+
+function api_industries_save() {
+  require_admin();
+  $pdo = db();
+  $b = body_json();
+  $name = trim($b['name'] ?? '');
+  
+  if (empty($name)) {
+    respond(['error' => 'Industry name is required'], 400);
+  }
+  
+  try {
+    $stmt = $pdo->prepare("INSERT INTO industries (name) VALUES (:name) RETURNING *");
+    $stmt->execute([':name' => $name]);
+    respond(['item' => $stmt->fetch()]);
+  } catch (PDOException $e) {
+    respond(['error' => 'Industry already exists'], 400);
+  }
+}
+
+function api_industries_delete() {
+  require_admin();
+  $pdo = db();
+  $id = (int)($_GET['id'] ?? 0);
+  $pdo->prepare("DELETE FROM industries WHERE id=:id")->execute([':id' => $id]);
+  respond(['ok' => true]);
 }
 
 function api_stats() {
@@ -1220,12 +1284,13 @@ function api_export() {
   require_admin();
   $p = db();
   $data = [
+    'leads' => $p->query("SELECT * FROM leads ORDER BY id")->fetchAll(),
     'contacts' => $p->query("SELECT * FROM contacts ORDER BY id")->fetchAll(),
     'calls' => $p->query("SELECT * FROM calls ORDER BY id")->fetchAll(),
     'projects' => $p->query("SELECT * FROM projects ORDER BY id")->fetchAll(),
     'settings' => $p->query("SELECT * FROM settings ORDER BY key")->fetchAll(),
   ];
-  header('Content-Disposition: attachment; filename="mini_crm_export.json"');
+  header('Content-Disposition: attachment; filename="koadi_crm_export.json"');
   respond($data);
 }
 
@@ -1235,10 +1300,14 @@ function api_import() {
   $b = body_json();
   $p->beginTransaction();
   try {
-    $p->exec("TRUNCATE calls, projects, contacts RESTART IDENTITY CASCADE");
+    $p->exec("TRUNCATE calls, projects, contacts, leads RESTART IDENTITY CASCADE");
+    foreach (($b['leads'] ?? []) as $r) {
+      $s = $p->prepare("INSERT INTO leads (id,name,phone,email,company,address,industry,status,assigned_to,created_at,updated_at) VALUES (:id,:n,:p,:e,:co,:a,:i,:st,:aid,:c,:u)");
+      $s->execute([':id' => $r['id'], ':n' => $r['name'], ':p' => $r['phone'], ':e' => $r['email'], ':co' => $r['company'], ':a' => $r['address'], ':i' => $r['industry'] ?? null, ':st' => $r['status'], ':aid' => $r['assigned_to'], ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
+    }
     foreach (($b['contacts'] ?? []) as $r) {
-      $s = $p->prepare("INSERT INTO contacts (id,type,company,name,email,phone_country,phone_number,source,notes,created_at,updated_at) VALUES (:id,:t,:co,:n,:e,:pc,:pn,:s,:no,:c,:u)");
-      $s->execute([':id' => $r['id'], ':t' => $r['type'], ':co' => $r['company'], ':n' => $r['name'], ':e' => $r['email'], ':pc' => $r['phone_country'], ':pn' => $r['phone_number'], ':s' => $r['source'], ':no' => $r['notes'], ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
+      $s = $p->prepare("INSERT INTO contacts (id,type,company,name,email,phone_country,phone_number,source,notes,industry,created_at,updated_at) VALUES (:id,:t,:co,:n,:e,:pc,:pn,:s,:no,:i,:c,:u)");
+      $s->execute([':id' => $r['id'], ':t' => $r['type'], ':co' => $r['company'], ':n' => $r['name'], ':e' => $r['email'], ':pc' => $r['phone_country'], ':pn' => $r['phone_number'], ':s' => $r['source'], ':no' => $r['notes'], ':i' => $r['industry'] ?? null, ':c' => $r['created_at'] ?? date('c'), ':u' => $r['updated_at'] ?? date('c')]);
     }
     foreach (($b['projects'] ?? []) as $r) {
       $s = $p->prepare("INSERT INTO projects (id,contact_id,name,value,stage,next_date,notes,created_at,updated_at) VALUES (:id,:cid,:n,:v,:s,:nx,:no,:c,:u)");
