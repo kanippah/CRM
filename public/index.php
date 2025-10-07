@@ -2452,7 +2452,7 @@ if (isset($_GET['background'])) {
         });
         alert('Lead converted to contact successfully!');
         await loadLeads();
-        switchPage('contacts');
+        switchView('contacts');
       } catch (e) {
         alert('Error: ' + e.message);
       }
@@ -3273,7 +3273,7 @@ if (isset($_GET['background'])) {
         });
         alert('Contact successfully returned to leads!');
         await loadContacts();
-        switchPage('leads');
+        switchView('leads');
       } catch (e) {
         alert('Error: ' + e.message);
       }
