@@ -2322,6 +2322,7 @@ if (isset($_GET['background'])) {
         </div>
         ${tabs}
         <div class="card">
+          <div id="leadsPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; padding: 15px;"></div>
           <table id="leadsTable">
             <thead>
               <tr>
@@ -2338,7 +2339,6 @@ if (isset($_GET['background'])) {
             </thead>
             <tbody></tbody>
           </table>
-          <div id="leadsPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; padding: 15px;"></div>
         </div>
       `;
       
