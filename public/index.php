@@ -1,4 +1,7 @@
 <?php
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
+ini_set('display_errors', '0');
+
 session_start();
 
 $DB_HOST = getenv('PGHOST') ?: '127.0.0.1';
@@ -45,57 +48,67 @@ function normalize_phone($country, $number) {
 function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
-  try {
-    $socket = fsockopen('ssl://' . $SMTP_HOST, $SMTP_PORT, $errno, $errstr, 30);
-    if (!$socket) {
-      error_log("SMTP connection failed: $errstr ($errno)");
-      return false;
-    }
-    
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "AUTH LOGIN\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, base64_encode($SMTP_USER) . "\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, base64_encode($SMTP_PASS) . "\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "MAIL FROM: <{$SMTP_USER}>\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "RCPT TO: <{$to}>\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "DATA\r\n");
-    $response = fgets($socket, 515);
-    
-    $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
-    $headers .= "Reply-To: {$SMTP_USER}\r\n";
-    $headers .= "MIME-Version: 1.0\r\n";
-    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $headers .= "Subject: {$subject}\r\n";
-    
-    fputs($socket, "To: {$to}\r\n");
-    fputs($socket, $headers);
-    fputs($socket, "\r\n");
-    fputs($socket, $message . "\r\n");
-    fputs($socket, ".\r\n");
-    $response = fgets($socket, 515);
-    
-    fputs($socket, "QUIT\r\n");
-    fclose($socket);
-    
-    return true;
-  } catch (Exception $e) {
-    error_log("Email sending failed: " . $e->getMessage());
+  $context = stream_context_create([
+    'ssl' => [
+      'verify_peer' => false,
+      'verify_peer_name' => false,
+      'allow_self_signed' => true
+    ]
+  ]);
+  
+  $socket = @stream_socket_client(
+    'ssl://' . $SMTP_HOST . ':' . $SMTP_PORT,
+    $errno,
+    $errstr,
+    30,
+    STREAM_CLIENT_CONNECT,
+    $context
+  );
+  
+  if (!$socket) {
     return false;
   }
+  
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "AUTH LOGIN\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, base64_encode($SMTP_USER) . "\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, base64_encode($SMTP_PASS) . "\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "MAIL FROM: <{$SMTP_USER}>\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "RCPT TO: <{$to}>\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "DATA\r\n");
+  $response = fgets($socket, 515);
+  
+  $headers = "From: Koadi Technology CRM <{$SMTP_USER}>\r\n";
+  $headers .= "Reply-To: {$SMTP_USER}\r\n";
+  $headers .= "MIME-Version: 1.0\r\n";
+  $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+  $headers .= "Subject: {$subject}\r\n";
+  
+  fputs($socket, "To: {$to}\r\n");
+  fputs($socket, $headers);
+  fputs($socket, "\r\n");
+  fputs($socket, $message . "\r\n");
+  fputs($socket, ".\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "QUIT\r\n");
+  fclose($socket);
+  
+  return true;
 }
 
 function ensure_schema() {
