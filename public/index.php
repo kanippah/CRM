@@ -1647,6 +1647,15 @@ if (isset($_GET['background'])) {
       color: var(--brand);
     }
     
+    tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    
+    tbody tr:hover {
+      background-color: var(--border);
+      cursor: pointer;
+    }
+    
     .modal {
       position: fixed;
       top: 0;
