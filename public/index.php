@@ -357,6 +357,7 @@ if (isset($_GET['api'])) {
       case 'contacts.save': api_contacts_save(); break;
       case 'contacts.delete': api_contacts_delete(); break;
       case 'contacts.reassign': api_contacts_reassign(); break;
+      case 'contacts.returnToLead': api_contacts_return_to_lead(); break;
       
       case 'calls.list': api_calls_list(); break;
       case 'calls.save': api_calls_save(); break;
@@ -1139,6 +1140,40 @@ function api_contacts_reassign() {
   $userId = $b['userId'] ? (int)$b['userId'] : null;
   $p->prepare("UPDATE contacts SET assigned_to=:uid WHERE id=:id")->execute([':uid' => $userId, ':id' => $id]);
   respond(['ok' => true]);
+}
+
+function api_contacts_return_to_lead() {
+  require_auth();
+  $p = db();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  $user_id = $_SESSION['user_id'];
+  
+  $stmt = $p->prepare("SELECT * FROM contacts WHERE id=:id");
+  $stmt->execute([':id' => $id]);
+  $contact = $stmt->fetch();
+  
+  if (!$contact) {
+    respond(['error' => 'Contact not found'], 404);
+  }
+  
+  if ($_SESSION['role'] !== 'admin' && $contact['assigned_to'] != $user_id) {
+    respond(['error' => 'Forbidden'], 403);
+  }
+  
+  $phone = trim(($contact['phone_country'] ?? '') . ' ' . ($contact['phone_number'] ?? ''));
+  $name = trim($contact['name'] ?? '');
+  $email = trim($contact['email'] ?? '');
+  $company = trim($contact['company'] ?? '');
+  $industry = trim($contact['industry'] ?? '');
+  
+  $stmt = $p->prepare("INSERT INTO leads (name, phone, email, company, industry, status, assigned_to) VALUES (:n, :p, :e, :c, :i, 'assigned', :a) RETURNING *");
+  $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':i' => $industry, ':a' => $user_id]);
+  $lead = $stmt->fetch();
+  
+  $p->prepare("DELETE FROM contacts WHERE id=:id")->execute([':id' => $id]);
+  
+  respond(['item' => $lead]);
 }
 
 function api_calls_list() {
@@ -2902,7 +2937,7 @@ if (isset($_GET['background'])) {
           : `<button class="btn" onclick="openCallFormForContact(${c.id})">Call</button>
              <button class="btn" onclick="openProjectFormForContact(${c.id})">Project</button>
              <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
-             <button class="btn danger" onclick="deleteContact(${c.id})">Delete</button>`;
+             <button class="btn warning" onclick="returnContactToLead(${c.id})">Return to Leads</button>`;
         
         return `
           <tr>
@@ -3119,6 +3154,21 @@ if (isset($_GET['background'])) {
       if (!confirm('Delete this contact?')) return;
       await api(`contacts.delete&id=${id}`, { method: 'DELETE' });
       await loadContacts();
+    }
+    
+    async function returnContactToLead(id) {
+      if (!confirm('Return this contact to leads? This will move the contact back to the leads pool.')) return;
+      try {
+        await api('contacts.returnToLead', {
+          method: 'POST',
+          body: JSON.stringify({ id })
+        });
+        alert('Contact successfully returned to leads!');
+        await loadContacts();
+        switchPage('leads');
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
     
     async function renderCalls() {
