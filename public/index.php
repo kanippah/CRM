@@ -301,6 +301,7 @@ if (isset($_GET['api'])) {
       case 'users.list': api_users_list(); break;
       case 'users.save': api_users_save(); break;
       case 'users.delete': api_users_delete(); break;
+      case 'users.toggle_status': api_users_toggle_status(); break;
       
       case 'leads.list': api_leads_list(); break;
       case 'leads.save': api_leads_save(); break;
@@ -377,6 +378,10 @@ function api_login() {
   $user = $stmt->fetch();
   
   if ($user && password_verify($password, $user['password'])) {
+    // Check if user is active
+    if (isset($user['status']) && $user['status'] === 'inactive') {
+      respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
+    }
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['email'] = $user['email'];
@@ -429,6 +434,11 @@ function api_session() {
     
     foreach ($users as $user) {
       if (password_verify($_COOKIE['remember_token'], $user['remember_token'])) {
+        // Check if user is active
+        if (isset($user['status']) && $user['status'] === 'inactive') {
+          setcookie('remember_token', '', time() - 3600, '/', '', true, true);
+          respond(['user' => null]);
+        }
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['email'] = $user['email'];
@@ -618,8 +628,11 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, created_at FROM users ORDER BY id DESC")->fetchAll();
-  respond(['items' => $users]);
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
+  
+  $combined = array_merge($users, $invites);
+  respond(['items' => $combined]);
 }
 
 function api_users_save() {
@@ -683,6 +696,20 @@ function api_users_delete() {
   $pdo = db();
   $pdo->prepare("DELETE FROM users WHERE id=:id")->execute([':id' => $id]);
   respond(['ok' => true]);
+}
+
+function api_users_toggle_status() {
+  require_admin();
+  $b = body_json();
+  $id = (int)($b['id'] ?? 0);
+  if ($id == $_SESSION['user_id']) {
+    respond(['error' => 'Cannot deactivate yourself'], 400);
+  }
+  $pdo = db();
+  $stmt = $pdo->prepare("UPDATE users SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END WHERE id=:id RETURNING status");
+  $stmt->execute([':id' => $id]);
+  $result = $stmt->fetch();
+  respond(['status' => $result['status']]);
 }
 
 function api_leads_list() {
@@ -2024,7 +2051,7 @@ if (isset($_GET['background'])) {
               <button onclick="switchView('projects')">📁 Projects</button>
               <button onclick="switchView('leads')" class="active">🎯 Leads</button>
               ${isAdmin ? '<button onclick="switchView(\'users\')">⚙️ Users</button>' : ''}
-              <button onclick="switchView('settings')">🔧 Settings</button>
+              ${isAdmin ? '<button onclick="switchView(\'settings\')">🔧 Settings</button>' : ''}
               <button onclick="handleLogout()" class="secondary">🚪 Logout</button>
               <button onclick="toggleTheme()" class="theme-toggle">🌓 Theme</button>
             </nav>
@@ -2433,13 +2460,14 @@ if (isset($_GET['background'])) {
           <button class="btn" onclick="openInviteForm()" style="background: var(--brand); margin-left: 8px;">Send Invite</button>
         </div>
         <div class="card">
-          <h2>Users</h2>
+          <h2>Users & Invitations</h2>
           <table id="usersTable">
             <thead>
               <tr>
                 <th>Email</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -2456,18 +2484,54 @@ if (isset($_GET['background'])) {
       const data = await api('users.list');
       const tbody = document.querySelector('#usersTable tbody');
       
-      tbody.innerHTML = data.items.map(user => `
-        <tr>
-          <td><strong>${user.email || 'N/A'}</strong></td>
-          <td>${user.full_name}</td>
-          <td><span class="badge ${user.role}">${user.role}</span></td>
-          <td>${new Date(user.created_at).toLocaleDateString()}</td>
-          <td>
-            <button class="btn" onclick="openUserForm(${user.id})">Edit</button>
-            ${user.id !== currentUser.id ? `<button class="btn danger" onclick="deleteUser(${user.id})">Delete</button>` : ''}
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = data.items.map(item => {
+        if (item.type === 'invite') {
+          return `
+            <tr style="opacity: 0.7;">
+              <td><strong>${item.email}</strong></td>
+              <td><em>Pending invitation</em></td>
+              <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td><span class="badge" style="background: var(--kt-yellow); color: #000;">Invited</span></td>
+              <td>${new Date(item.created_at).toLocaleDateString()}</td>
+              <td><em>Expires: ${new Date(item.expires_at).toLocaleDateString()}</em></td>
+            </tr>
+          `;
+        } else {
+          const statusBadge = item.status === 'active' 
+            ? '<span class="badge" style="background: #28a745;">Active</span>' 
+            : '<span class="badge" style="background: #6c757d;">Inactive</span>';
+          const toggleBtn = item.id !== currentUser.id 
+            ? `<button class="btn ${item.status === 'active' ? 'warning' : 'success'}" onclick="toggleUserStatus(${item.id})">${item.status === 'active' ? 'Deactivate' : 'Activate'}</button>` 
+            : '';
+          return `
+            <tr>
+              <td><strong>${item.email || 'N/A'}</strong></td>
+              <td>${item.full_name}</td>
+              <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td>${statusBadge}</td>
+              <td>${new Date(item.created_at).toLocaleDateString()}</td>
+              <td>
+                <button class="btn" onclick="openUserForm(${item.id})">Edit</button>
+                ${toggleBtn}
+                ${item.id !== currentUser.id ? `<button class="btn danger" onclick="deleteUser(${item.id})">Delete</button>` : ''}
+              </td>
+            </tr>
+          `;
+        }
+      }).join('');
+    }
+    
+    async function toggleUserStatus(id) {
+      if (!confirm('Toggle user status?')) return;
+      try {
+        await api('users.toggle_status', {
+          method: 'POST',
+          body: JSON.stringify({ id })
+        });
+        await loadUsers();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
     
     function openUserForm(id = null) {
