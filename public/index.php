@@ -398,6 +398,7 @@ if (isset($_GET['api'])) {
       case 'reset': api_reset(); break;
       
       case 'twilio.call': api_twilio_call(); break;
+      case 'twilio.connect': api_twilio_connect(); break;
       case 'twilio.status': api_twilio_status(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
@@ -1481,8 +1482,8 @@ function api_twilio_call() {
   
   $to_number = $b['to_number'] ?? '';
   $contact_id = (int)($b['contact_id'] ?? 0);
-  $lead_id = isset($b['lead_id']) ? (int)$b['lead_id'] : null;
   $user_id = $_SESSION['user_id'];
+  $user_phone = $b['user_phone'] ?? '';
   
   $stmt = $p->prepare("SELECT phone_number FROM users WHERE id=:id");
   $stmt->execute([':id' => $user_id]);
@@ -1492,16 +1493,22 @@ function api_twilio_call() {
     respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
   }
   
+  if (!$user_phone) {
+    respond(['error' => 'Please provide your phone number to receive the call'], 400);
+  }
+  
   $from_number = $user['phone_number'];
-  $callback_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . 
-                  $_SERVER['HTTP_HOST'] . '/?api=twilio.status';
+  $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
+  $callback_url = $base_url . '/?api=twilio.status';
+  $twiml_url = $base_url . '/?api=twilio.connect&to=' . urlencode($to_number) . '&from=' . urlencode($from_number);
   
   $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
   
+  // Call the sales user first, then bridge to contact
   $data = [
     'From' => $from_number,
-    'To' => $to_number,
-    'Url' => 'http://demo.twilio.com/docs/voice.xml',
+    'To' => $user_phone,
+    'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
     'Record' => 'true'
@@ -1548,6 +1555,22 @@ function api_twilio_call() {
   $call = $stmt->fetch();
   
   respond(['ok' => true, 'call' => $call, 'twilio' => $twilio_response]);
+}
+
+function api_twilio_connect() {
+  // This endpoint returns TwiML to dial the contact when sales user answers
+  $to_number = $_GET['to'] ?? '';
+  $from_number = $_GET['from'] ?? '';
+  
+  header('Content-Type: application/xml');
+  echo '<?xml version="1.0" encoding="UTF-8"?>';
+  echo '<Response>';
+  echo '  <Say voice="alice">Connecting you now.</Say>';
+  echo '  <Dial callerId="' . htmlspecialchars($from_number) . '" record="record-from-answer">';
+  echo '    <Number>' . htmlspecialchars($to_number) . '</Number>';
+  echo '  </Dial>';
+  echo '</Response>';
+  exit;
 }
 
 function api_twilio_status() {
@@ -3567,19 +3590,27 @@ if (isset($_GET['background'])) {
     }
     
     async function initiateCall(contactId, phoneNumber) {
-      if (!confirm(`Call ${phoneNumber}?`)) return;
+      const userPhone = prompt(`Enter YOUR phone number to receive the call (e.g., +1234567890):\n\nTwilio will call you first, then connect you to ${phoneNumber}`);
+      if (!userPhone) return;
+      
+      // Validate phone format
+      if (!userPhone.match(/^\+?[1-9]\d{1,14}$/)) {
+        alert('Please enter a valid phone number with country code (e.g., +18146511771)');
+        return;
+      }
       
       try {
         const response = await api('twilio.call', {
           method: 'POST',
           body: JSON.stringify({
             contact_id: contactId,
-            to_number: phoneNumber
+            to_number: phoneNumber,
+            user_phone: userPhone
           })
         });
         
         if (response.ok) {
-          alert('Call initiated successfully! The call will be logged automatically.');
+          alert(`Call initiated! Answer your phone at ${userPhone} to be connected to ${phoneNumber}`);
           // Only reload calls if we're on the calls view
           if (currentView === 'calls') {
             await loadCalls();
