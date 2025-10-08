@@ -399,6 +399,7 @@ if (isset($_GET['api'])) {
       
       case 'twilio.call': api_twilio_call(); break;
       case 'twilio.bridge': api_twilio_bridge(); break;
+      case 'twilio.token': api_twilio_token(); break;
       case 'twilio.status': api_twilio_status(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
@@ -2189,6 +2190,7 @@ if (isset($_GET['background'])) {
 <body data-theme="dark">
   <div id="app"></div>
   
+  <script src="https://sdk.twilio.com/js/client/releases/1.14.0/twilio.min.js"></script>
   <script>
     let currentUser = null;
     let currentView = 'leads';
@@ -2198,6 +2200,8 @@ if (isset($_GET['background'])) {
     let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
+    let twilioDevice = null;
+    let activeCall = null;
     
     async function api(endpoint, options = {}) {
       const res = await fetch(`?api=${endpoint}`, {
