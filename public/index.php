@@ -2,6 +2,12 @@
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', '0');
 
+// Configure session settings for proper persistence
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.cookie_lifetime', '0'); // Session cookie (until browser closes)
+
 session_start();
 
 $DB_HOST = getenv('PGHOST') ?: '127.0.0.1';
