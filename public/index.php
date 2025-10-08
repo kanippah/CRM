@@ -681,7 +681,7 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, status, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, phone_number, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
   $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
@@ -698,6 +698,7 @@ function api_users_save() {
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
+  $phone_number = trim($b['phone_number'] ?? '');
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
@@ -721,19 +722,19 @@ function api_users_save() {
   
   if ($id) {
     if ($password) {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p WHERE id=:id RETURNING id, username, email, full_name, role");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, phone_number=:ph WHERE id=:id RETURNING id, username, email, full_name, role, phone_number");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':ph' => $phone_number, ':id' => $id]);
     } else {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r WHERE id=:id RETURNING id, username, email, full_name, role");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, phone_number=:ph WHERE id=:id RETURNING id, username, email, full_name, role, phone_number");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':id' => $id]);
     }
     $user = $stmt->fetch();
   } else {
     if (!$password) {
       respond(['error' => 'Password is required for new users'], 400);
     }
-    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id, username, email, full_name, role");
-    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
+    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, phone_number) VALUES (:e, :u, :p, :n, :r, :ph) RETURNING id, username, email, full_name, role, phone_number");
+    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':ph' => $phone_number]);
     $user = $stmt->fetch();
   }
   
@@ -2918,6 +2919,7 @@ if (isset($_GET['background'])) {
                 <th>Email</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Phone Number (DID)</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -2942,6 +2944,7 @@ if (isset($_GET['background'])) {
               <td><strong>${item.email}</strong></td>
               <td><em>Pending invitation</em></td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td>-</td>
               <td><span class="badge" style="background: var(--kt-yellow); color: #000;">Invited</span></td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -2957,11 +2960,13 @@ if (isset($_GET['background'])) {
           const toggleBtn = item.id !== currentUser.id 
             ? `<button class="btn ${item.status === 'active' ? 'warning' : 'success'}" onclick="toggleUserStatus(${item.id})">${item.status === 'active' ? 'Deactivate' : 'Activate'}</button>` 
             : '';
+          const phoneNumber = item.phone_number || '-';
           return `
             <tr>
               <td><strong>${item.email || 'N/A'}</strong></td>
               <td>${item.full_name}</td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td>${phoneNumber}</td>
               <td>${statusBadge}</td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -3032,6 +3037,11 @@ if (isset($_GET['background'])) {
               <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Phone Number (DID for outbound calls)</label>
+            <input type="text" name="phone_number" value="${user?.phone_number || ''}" placeholder="+1234567890">
+            <small style="color: var(--muted); display: block; margin-top: 4px;">Enter in E.164 format (e.g., +1234567890)</small>
+          </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
         </form>
@@ -3055,7 +3065,8 @@ if (isset($_GET['background'])) {
         email: email,
         full_name: form.full_name.value,
         password: form.password.value,
-        role: form.role.value
+        role: form.role.value,
+        phone_number: form.phone_number.value.trim()
       };
       
       try {
