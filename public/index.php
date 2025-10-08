@@ -1506,7 +1506,7 @@ function api_twilio_call() {
     'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
-    'Record' => 'record-from-answer'
+    'Record' => 'true'
   ];
   
   $auth = base64_encode(getenv('TWILIO_ACCOUNT_SID') . ':' . getenv('TWILIO_AUTH_TOKEN'));
