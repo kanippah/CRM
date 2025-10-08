@@ -497,11 +497,7 @@ function api_logout() {
 }
 
 function api_session() {
-  error_log("Session check - user_id: " . ($_SESSION['user_id'] ?? 'NOT SET'));
-  error_log("Session check - session data: " . json_encode($_SESSION));
-  
   if (isset($_SESSION['user_id'])) {
-    error_log("Returning user from session: ID={$_SESSION['user_id']}, Role={$_SESSION['role']}");
     respond(['user' => [
       'id' => $_SESSION['user_id'],
       'username' => $_SESSION['username'],
@@ -509,7 +505,6 @@ function api_session() {
       'role' => $_SESSION['role']
     ]]);
   } elseif (isset($_COOKIE['remember_token'])) {
-    error_log("No session found, checking remember_token cookie");
     $pdo = db();
     $stmt = $pdo->query("SELECT * FROM users WHERE remember_token IS NOT NULL");
     $users = $stmt->fetchAll();
@@ -536,7 +531,6 @@ function api_session() {
       }
     }
   }
-  error_log("No valid session or remember_token found, returning null");
   respond(['user' => null]);
 }
 
@@ -2200,18 +2194,13 @@ if (isset($_GET['background'])) {
     async function checkSession() {
       try {
         const data = await api('session');
-        console.log('Session API response:', data);
         currentUser = data.user;
-        console.log('currentUser set to:', currentUser);
         if (currentUser) {
-          console.log('User found, calling renderApp()');
           renderApp();
         } else {
-          console.log('No user, calling renderLogin()');
           renderLogin();
         }
       } catch (e) {
-        console.error('Session check error:', e);
         renderLogin();
       }
     }
