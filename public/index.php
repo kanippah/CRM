@@ -707,7 +707,7 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, status, phone_number, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, phone_number, personal_phone, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
   $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
@@ -725,6 +725,7 @@ function api_users_save() {
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
   $phone_number = trim($b['phone_number'] ?? '');
+  $personal_phone = trim($b['personal_phone'] ?? '');
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
@@ -748,19 +749,19 @@ function api_users_save() {
   
   if ($id) {
     if ($password) {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, phone_number=:ph WHERE id=:id RETURNING id, username, email, full_name, role, phone_number");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':ph' => $phone_number, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, phone_number=:ph, personal_phone=:pp WHERE id=:id RETURNING id, username, email, full_name, role, phone_number, personal_phone");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':ph' => $phone_number, ':pp' => $personal_phone, ':id' => $id]);
     } else {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, phone_number=:ph WHERE id=:id RETURNING id, username, email, full_name, role, phone_number");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, phone_number=:ph, personal_phone=:pp WHERE id=:id RETURNING id, username, email, full_name, role, phone_number, personal_phone");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':pp' => $personal_phone, ':id' => $id]);
     }
     $user = $stmt->fetch();
   } else {
     if (!$password) {
       respond(['error' => 'Password is required for new users'], 400);
     }
-    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, phone_number) VALUES (:e, :u, :p, :n, :r, :ph) RETURNING id, username, email, full_name, role, phone_number");
-    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':ph' => $phone_number]);
+    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, phone_number, personal_phone) VALUES (:e, :u, :p, :n, :r, :ph, :pp) RETURNING id, username, email, full_name, role, phone_number, personal_phone");
+    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':pp' => $personal_phone]);
     $user = $stmt->fetch();
   }
   
@@ -1485,25 +1486,30 @@ function api_twilio_call() {
   $contact_id = (int)($b['contact_id'] ?? 0);
   $user_id = $_SESSION['user_id'];
   
-  $stmt = $p->prepare("SELECT phone_number FROM users WHERE id=:id");
+  $stmt = $p->prepare("SELECT phone_number, personal_phone FROM users WHERE id=:id");
   $stmt->execute([':id' => $user_id]);
   $user = $stmt->fetch();
   
   if (!$user || !$user['phone_number']) {
-    respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
+    respond(['error' => 'No DID assigned to your account. Please contact admin.'], 400);
   }
   
-  $user_did = $user['phone_number']; // DID to call first
+  if (!$user['personal_phone']) {
+    respond(['error' => 'No personal phone number configured. Please update your profile in Users settings.'], 400);
+  }
+  
+  $user_did = $user['phone_number']; // DID for caller ID
+  $user_phone = $user['personal_phone']; // Your actual phone
   $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
   $callback_url = $base_url . '/?api=twilio.status';
   $twiml_url = $base_url . '/?api=twilio.bridge&contact=' . urlencode($to_number) . '&from=' . urlencode($user_did);
   
   $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
   
-  // Step 1: Call the user's DID first, when they answer, bridge to contact
+  // Step 1: Call the user's personal phone first, when they answer, bridge to contact
   $data = [
     'From' => $user_did,
-    'To' => $user_did,
+    'To' => $user_phone,
     'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
@@ -3138,11 +3144,16 @@ if (isset($_GET['background'])) {
             </select>
           </div>
           <div class="form-group">
-            <label>Phone Number (DID for outbound calls)</label>
+            <label>Phone Number (DID for caller ID)</label>
             <select name="phone_number" id="phoneNumberSelect">
               ${numberOptions}
             </select>
-            <small style="color: var(--muted); display: block; margin-top: 4px;">Select from your Twilio account numbers</small>
+            <small style="color: var(--muted); display: block; margin-top: 4px;">Twilio number shown to contacts as caller ID</small>
+          </div>
+          <div class="form-group">
+            <label>Your Phone Number *</label>
+            <input type="tel" name="personal_phone" value="${user?.personal_phone || ''}" placeholder="+18146511771" required>
+            <small style="color: var(--muted); display: block; margin-top: 4px;">Your actual phone number (Twilio will call this first, then bridge to contact)</small>
           </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
@@ -3168,7 +3179,8 @@ if (isset($_GET['background'])) {
         full_name: form.full_name.value,
         password: form.password.value,
         role: form.role.value,
-        phone_number: form.phone_number.value.trim()
+        phone_number: form.phone_number.value.trim(),
+        personal_phone: form.personal_phone.value.trim()
       };
       
       try {
