@@ -393,6 +393,7 @@ if (isset($_GET['api'])) {
       
       case 'twilio.call': api_twilio_call(); break;
       case 'twilio.status': api_twilio_status(); break;
+      case 'twilio.numbers': api_twilio_numbers(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -1569,6 +1570,48 @@ function api_twilio_status() {
   error_log("Twilio callback: Updated call {$call['id']} with status $call_status, duration $call_duration");
   
   respond(['ok' => true]);
+}
+
+function api_twilio_numbers() {
+  require_admin();
+  
+  $account_sid = getenv('TWILIO_ACCOUNT_SID');
+  $auth_token = getenv('TWILIO_AUTH_TOKEN');
+  
+  if (!$account_sid || !$auth_token) {
+    respond(['error' => 'Twilio credentials not configured'], 500);
+  }
+  
+  $url = "https://api.twilio.com/2010-04-01/Accounts/{$account_sid}/IncomingPhoneNumbers.json";
+  $auth = base64_encode($account_sid . ':' . $auth_token);
+  
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Basic ' . $auth
+  ]);
+  
+  $response = curl_exec($ch);
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  
+  if ($http_code != 200) {
+    error_log("Twilio API error fetching numbers: " . $response);
+    respond(['error' => 'Failed to fetch Twilio numbers', 'detail' => $response], 500);
+  }
+  
+  $data = json_decode($response, true);
+  $numbers = [];
+  
+  foreach (($data['incoming_phone_numbers'] ?? []) as $num) {
+    $numbers[] = [
+      'sid' => $num['sid'],
+      'phone_number' => $num['phone_number'],
+      'friendly_name' => $num['friendly_name'] ?? $num['phone_number']
+    ];
+  }
+  
+  respond(['numbers' => $numbers]);
 }
 
 if (isset($_GET['logo'])) {
@@ -3003,18 +3046,30 @@ if (isset($_GET['background'])) {
       }
     }
     
-    function openUserForm(id = null) {
+    async function openUserForm(id = null) {
       if (id) {
-        api('users.list').then(data => {
-          const user = data.items.find(u => u.id === id);
-          showUserForm(user);
-        });
+        const data = await api('users.list');
+        const user = data.items.find(u => u.id === id);
+        await showUserForm(user);
       } else {
-        showUserForm(null);
+        await showUserForm(null);
       }
     }
     
-    function showUserForm(user) {
+    async function showUserForm(user) {
+      let twilioNumbers = [];
+      try {
+        const numbersData = await api('twilio.numbers');
+        twilioNumbers = numbersData.numbers || [];
+      } catch (e) {
+        console.error('Failed to fetch Twilio numbers:', e);
+      }
+      
+      const numberOptions = twilioNumbers.length > 0
+        ? `<option value="">Select a Twilio Number</option>` + 
+          twilioNumbers.map(n => `<option value="${n.phone_number}" ${user?.phone_number === n.phone_number ? 'selected' : ''}>${n.friendly_name} (${n.phone_number})</option>`).join('')
+        : `<option value="">No Twilio numbers available</option>`;
+      
       showModal(`
         <h3>${user ? 'Edit User' : 'Add User'}</h3>
         <form onsubmit="saveUser(event, ${user ? user.id : 'null'})">
@@ -3039,8 +3094,10 @@ if (isset($_GET['background'])) {
           </div>
           <div class="form-group">
             <label>Phone Number (DID for outbound calls)</label>
-            <input type="text" name="phone_number" value="${user?.phone_number || ''}" placeholder="+1234567890">
-            <small style="color: var(--muted); display: block; margin-top: 4px;">Enter in E.164 format (e.g., +1234567890)</small>
+            <select name="phone_number" id="phoneNumberSelect">
+              ${numberOptions}
+            </select>
+            <small style="color: var(--muted); display: block; margin-top: 4px;">Select from your Twilio account numbers</small>
           </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
