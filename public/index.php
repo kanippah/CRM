@@ -2200,13 +2200,18 @@ if (isset($_GET['background'])) {
     async function checkSession() {
       try {
         const data = await api('session');
+        console.log('Session API response:', data);
         currentUser = data.user;
+        console.log('currentUser set to:', currentUser);
         if (currentUser) {
+          console.log('User found, calling renderApp()');
           renderApp();
         } else {
+          console.log('No user, calling renderLogin()');
           renderLogin();
         }
       } catch (e) {
+        console.error('Session check error:', e);
         renderLogin();
       }
     }
