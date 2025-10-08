@@ -421,8 +421,11 @@ function api_login() {
   $password = $b['password'] ?? '';
   $remember_me = $b['remember_me'] ?? false;
   
+  error_log("Login attempt for email: $email");
+  
   // Validate email format
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    error_log("Login failed: Invalid email format");
     respond(['error' => 'Invalid email format'], 400);
   }
   
@@ -431,35 +434,49 @@ function api_login() {
   $stmt->execute([':e' => $email]);
   $user = $stmt->fetch();
   
-  if ($user && password_verify($password, $user['password'])) {
-    // Check if user is active
-    if (isset($user['status']) && $user['status'] === 'inactive') {
-      respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
-    }
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['email'] = $user['email'];
-    $_SESSION['full_name'] = $user['full_name'];
-    $_SESSION['role'] = $user['role'];
-    
-    // Handle remember me
-    if ($remember_me) {
-      $token = bin2hex(random_bytes(32));
-      $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
-        ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
-      setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
-    }
-    
-    respond(['ok' => true, 'user' => [
-      'id' => $user['id'],
-      'username' => $user['username'],
-      'email' => $user['email'],
-      'full_name' => $user['full_name'],
-      'role' => $user['role']
-    ]]);
-  } else {
+  if (!$user) {
+    error_log("Login failed: User not found for email $email");
     respond(['error' => 'Invalid email or password'], 401);
   }
+  
+  error_log("User found: ID={$user['id']}, Role={$user['role']}, Status={$user['status']}");
+  
+  if (!password_verify($password, $user['password'])) {
+    error_log("Login failed: Password verification failed for user {$user['id']}");
+    respond(['error' => 'Invalid email or password'], 401);
+  }
+  
+  error_log("Password verified successfully for user {$user['id']}");
+  
+  // Check if user is active
+  if (isset($user['status']) && $user['status'] === 'inactive') {
+    error_log("Login failed: User {$user['id']} is inactive");
+    respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
+  }
+  
+  $_SESSION['user_id'] = $user['id'];
+  $_SESSION['username'] = $user['username'];
+  $_SESSION['email'] = $user['email'];
+  $_SESSION['full_name'] = $user['full_name'];
+  $_SESSION['role'] = $user['role'];
+  
+  error_log("Session created for user {$user['id']}, role: {$user['role']}");
+  
+  // Handle remember me
+  if ($remember_me) {
+    $token = bin2hex(random_bytes(32));
+    $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
+      ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
+    setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
+  }
+  
+  respond(['ok' => true, 'user' => [
+    'id' => $user['id'],
+    'username' => $user['username'],
+    'email' => $user['email'],
+    'full_name' => $user['full_name'],
+    'role' => $user['role']
+  ]]);
 }
 
 function api_logout() {
