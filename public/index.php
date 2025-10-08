@@ -2539,10 +2539,14 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
+        const phoneDisplay = lead.phone && !isHidden
+          ? `${lead.phone} <button class="btn" style="padding: 2px 8px; margin-left: 4px;" onclick="initiateCallFromLead(${lead.id}, '${lead.phone}')">📞 Call</button>`
+          : (isHidden ? '***' : '-');
+        
         return `
           <tr>
             <td>${nameDisplay}</td>
-            <td>${isHidden ? '***' : lead.phone}</td>
+            <td>${phoneDisplay}</td>
             <td>${lead.email}</td>
             <td>${lead.company || '-'}</td>
             <td>${lead.industry || '-'}</td>
@@ -3222,6 +3226,11 @@ if (isset($_GET['background'])) {
       tbody.innerHTML = data.items.map(c => {
         const nameDisplay = `<a href="#" onclick="viewContact(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${c.name || '(no name)'}</a>`;
         
+        const fullPhone = (c.phone_country||'') + ' ' + (c.phone_number||'');
+        const phoneDisplay = c.phone_number 
+          ? `${fullPhone} <button class="btn" style="padding: 2px 8px; margin-left: 4px;" onclick="initiateCall(${c.id}, '${fullPhone.trim()}')">📞 Call</button>`
+          : '-';
+        
         const actions = isAdmin 
           ? `<button class="btn" onclick="openContactReassignModal(${c.id})">Reassign</button>
              <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
@@ -3236,7 +3245,7 @@ if (isset($_GET['background'])) {
             <td>${nameDisplay}</td>
             <td>${c.company || '-'}</td>
             <td>${c.type || 'Individual'}</td>
-            <td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td>
+            <td>${phoneDisplay}</td>
             <td>${c.email || '-'}</td>
             <td>${c.industry || '-'}</td>
             ${isAdmin ? `<td>${c.assigned_user || '<em style="color: var(--muted);">Unassigned</em>'}</td>` : ''}
@@ -3464,6 +3473,33 @@ if (isset($_GET['background'])) {
         console.error('Return to lead error:', e);
         alert('Error: ' + e.message);
       }
+    }
+    
+    async function initiateCall(contactId, phoneNumber) {
+      if (!confirm(`Call ${phoneNumber}?`)) return;
+      
+      try {
+        const response = await api('twilio.call', {
+          method: 'POST',
+          body: JSON.stringify({
+            contact_id: contactId,
+            to_number: phoneNumber
+          })
+        });
+        
+        if (response.ok) {
+          alert('Call initiated successfully! The call will be logged automatically.');
+          await loadCalls();
+        }
+      } catch (e) {
+        alert('Error initiating call: ' + e.message);
+      }
+    }
+    
+    async function initiateCallFromLead(leadId, phoneNumber) {
+      if (!confirm(`Call ${phoneNumber}? Note: This lead will need to be converted to a contact to log the call.`)) return;
+      
+      alert('Please convert this lead to a contact first to make calls.');
     }
     
     async function renderCalls() {
