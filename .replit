@@ -1,6 +1,7 @@
-modules = ["php-8.4", "postgresql-16"]
+modules = ["php-8.4", "postgresql-16", "python-3.11"]
 [agent]
 expertMode = true
+integrations = ["twilio:1.0.0"]
 
 [workflows]
 runButton = "Project"

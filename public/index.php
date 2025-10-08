@@ -284,6 +284,18 @@ function ensure_schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='industry') THEN
         ALTER TABLE contacts ADD COLUMN industry TEXT;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone_number') THEN
+        ALTER TABLE users ADD COLUMN phone_number TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_call_sid') THEN
+        ALTER TABLE calls ADD COLUMN twilio_call_sid TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_status') THEN
+        ALTER TABLE calls ADD COLUMN twilio_status TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_recording_url') THEN
+        ALTER TABLE calls ADD COLUMN twilio_recording_url TEXT;
+      END IF;
     END $$;
     
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
