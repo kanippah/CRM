@@ -3580,7 +3580,10 @@ if (isset($_GET['background'])) {
         
         if (response.ok) {
           alert('Call initiated successfully! The call will be logged automatically.');
-          await loadCalls();
+          // Only reload calls if we're on the calls view
+          if (currentView === 'calls') {
+            await loadCalls();
+          }
         }
       } catch (e) {
         alert('Error initiating call: ' + e.message);
