@@ -1483,7 +1483,6 @@ function api_twilio_call() {
   $to_number = $b['to_number'] ?? '';
   $contact_id = (int)($b['contact_id'] ?? 0);
   $user_id = $_SESSION['user_id'];
-  $user_phone = $b['user_phone'] ?? '';
   
   $stmt = $p->prepare("SELECT phone_number FROM users WHERE id=:id");
   $stmt->execute([':id' => $user_id]);
@@ -1493,21 +1492,18 @@ function api_twilio_call() {
     respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
   }
   
-  if (!$user_phone) {
-    respond(['error' => 'Please provide your phone number to receive the call'], 400);
-  }
-  
   $from_number = $user['phone_number'];
+  $user_did = $user['phone_number']; // The DID number to call the sales user
   $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
   $callback_url = $base_url . '/?api=twilio.status';
   $twiml_url = $base_url . '/?api=twilio.connect&to=' . urlencode($to_number) . '&from=' . urlencode($from_number);
   
   $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
   
-  // Call the sales user first, then bridge to contact
+  // Call the sales user's DID first, then bridge to contact
   $data = [
     'From' => $from_number,
-    'To' => $user_phone,
+    'To' => $user_did,
     'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
@@ -3590,27 +3586,19 @@ if (isset($_GET['background'])) {
     }
     
     async function initiateCall(contactId, phoneNumber) {
-      const userPhone = prompt(`Enter YOUR phone number to receive the call (e.g., +1234567890):\n\nTwilio will call you first, then connect you to ${phoneNumber}`);
-      if (!userPhone) return;
-      
-      // Validate phone format
-      if (!userPhone.match(/^\+?[1-9]\d{1,14}$/)) {
-        alert('Please enter a valid phone number with country code (e.g., +18146511771)');
-        return;
-      }
+      if (!confirm(`Call ${phoneNumber}?\n\nYour DID will ring, answer it to be connected.`)) return;
       
       try {
         const response = await api('twilio.call', {
           method: 'POST',
           body: JSON.stringify({
             contact_id: contactId,
-            to_number: phoneNumber,
-            user_phone: userPhone
+            to_number: phoneNumber
           })
         });
         
         if (response.ok) {
-          alert(`Call initiated! Answer your phone at ${userPhone} to be connected to ${phoneNumber}`);
+          alert('Call initiated! Your DID will ring - answer it to be connected to the contact.');
           // Only reload calls if we're on the calls view
           if (currentView === 'calls') {
             await loadCalls();
