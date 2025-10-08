@@ -398,7 +398,7 @@ if (isset($_GET['api'])) {
       case 'reset': api_reset(); break;
       
       case 'twilio.call': api_twilio_call(); break;
-      case 'twilio.connect': api_twilio_connect(); break;
+      case 'twilio.twiml': api_twilio_twiml(); break;
       case 'twilio.status': api_twilio_status(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
@@ -1492,18 +1492,17 @@ function api_twilio_call() {
     respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
   }
   
-  $from_number = $user['phone_number'];
-  $user_did = $user['phone_number']; // The DID number to call the sales user
+  $from_number = $user['phone_number']; // DID for caller ID
   $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
   $callback_url = $base_url . '/?api=twilio.status';
-  $twiml_url = $base_url . '/?api=twilio.connect&to=' . urlencode($to_number) . '&from=' . urlencode($from_number);
+  $twiml_url = $base_url . '/?api=twilio.twiml';
   
   $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
   
-  // Call the sales user's DID first, then bridge to contact
+  // Direct outbound call to contact with DID as caller ID
   $data = [
     'From' => $from_number,
-    'To' => $user_did,
+    'To' => $to_number,
     'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
@@ -1553,18 +1552,13 @@ function api_twilio_call() {
   respond(['ok' => true, 'call' => $call, 'twilio' => $twilio_response]);
 }
 
-function api_twilio_connect() {
-  // This endpoint returns TwiML to dial the contact when sales user answers
-  $to_number = $_GET['to'] ?? '';
-  $from_number = $_GET['from'] ?? '';
-  
+function api_twilio_twiml() {
+  // Simple TwiML that just plays ringing tone - call will be answered automatically
   header('Content-Type: application/xml');
   echo '<?xml version="1.0" encoding="UTF-8"?>';
   echo '<Response>';
-  echo '  <Say voice="alice">Connecting you now.</Say>';
-  echo '  <Dial callerId="' . htmlspecialchars($from_number) . '" record="record-from-answer">';
-  echo '    <Number>' . htmlspecialchars($to_number) . '</Number>';
-  echo '  </Dial>';
+  echo '  <Say voice="alice">This is a call from Koadi Technology CRM.</Say>';
+  echo '  <Pause length="3600"/>';
   echo '</Response>';
   exit;
 }
@@ -3586,7 +3580,7 @@ if (isset($_GET['background'])) {
     }
     
     async function initiateCall(contactId, phoneNumber) {
-      if (!confirm(`Call ${phoneNumber}?\n\nYour DID will ring, answer it to be connected.`)) return;
+      if (!confirm(`Call ${phoneNumber}?`)) return;
       
       try {
         const response = await api('twilio.call', {
@@ -3598,7 +3592,7 @@ if (isset($_GET['background'])) {
         });
         
         if (response.ok) {
-          alert('Call initiated! Your DID will ring - answer it to be connected to the contact.');
+          alert('Call initiated successfully! The contact will receive a call from your DID and the call will be logged automatically.');
           // Only reload calls if we're on the calls view
           if (currentView === 'calls') {
             await loadCalls();
