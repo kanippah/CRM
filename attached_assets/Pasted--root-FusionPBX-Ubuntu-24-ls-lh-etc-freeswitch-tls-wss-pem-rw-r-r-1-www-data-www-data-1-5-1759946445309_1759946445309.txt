@@ -1,0 +1,59 @@
+
+root@FusionPBX-Ubuntu-24:~# ls -lh /etc/freeswitch/tls/wss.pem
+-rw-r--r-- 1 www-data www-data 1.5K Oct  8 17:51 /etc/freeswitch/tls/wss.pem
+root@FusionPBX-Ubuntu-24:~# cat /etc/freeswitch/tls/wss.pem | head -20
+-----BEGIN CERTIFICATE-----
+MIIDjzCCAxSgAwIBAgISBvugNWgDh5Pf68RYNJNAZfpVMAoGCCqGSM49BAMDMDIx
+CzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQDEwJF
+ODAeFw0yNTEwMDgxNjUwMjRaFw0yNjAxMDYxNjUwMjNaMBwxGjAYBgNVBAMTEXBi
+eC5rb2FkaXRlY2guY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdic+7qOE
+sPN4SatjGn7NH8RsdCxfqENIJcNuBfAlDFlZ5sVbJvKDmz2p/yKVyiYnBrjhdk4V
+Qdy1N5AWLXW/BaOCAh4wggIaMA4GA1UdDwEB/wQEAwIHgDAdBgNVHSUEFjAUBggr
+BgEFBQcDAQYIKwYBBQUHAwIwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUMZ0VYM4g
+6zPeF0yMx5zz7viEIdIwHwYDVR0jBBgwFoAUjw0TovYuftFQbDMYOF1ZjiNykcow
+MgYIKwYBBQUHAQEEJjAkMCIGCCsGAQUFBzAChhZodHRwOi8vZTguaS5sZW5jci5v
+cmcvMBwGA1UdEQQVMBOCEXBieC5rb2FkaXRlY2guY29tMBMGA1UdIAQMMAowCAYG
+Z4EMAQIBMC0GA1UdHwQmMCQwIqAgoB6GHGh0dHA6Ly9lOC5jLmxlbmNyLm9yZy84
+Ni5jcmwwggEDBgorBgEEAdZ5AgQCBIH0BIHxAO8AdgDtPEvW6AbCpKIAV9vLJOI4
+Ad9RL+3EhsVwDyDdtz4/4AAAAZnE8LmbAAAEAwBHMEUCIQDTVXuwuTWvBu7ht+sl
+GVBxA7MzmYaGlM6471cyPdgsgwIgKCt8IaUX3UQBPQWJjvu0soU8b0QMsNxtYj+7
+j666kZ4AdQAZhtTHKKpv/roDb3gqTQGRqs4tcjEPrs5dcEEtJUzH1AAAAZnE8Lmc
+AAAEAwBGMEQCIFKgbNLVe+Tzz7e75/lB60slV+aVZzDEZxmu7InKqmYxAiBgCXs7
+Xgopc3SdUd6x7pOM5D62GYAB04cL1y9tureB+jAKBggqhkjOPQQDAwNpADBmAjEA
+3Z9DcVoLL5md43OyJ0T9253fJKX4qHznI9jwk0UhcAom39govQgKfEfnKJF+juhC
+AjEA2moww88Zdzh/gXC0B65Oh8yIaLdKG+KpXt+3WhbPN1Qh06blJV56+WvhP/hv
+root@FusionPBX-Ubuntu-24:~# ls -la /etc/letsencrypt/live/pbx.koaditech.com/
+total 12
+drwxr-xr-x 2 root root 4096 Oct  8 17:48 .
+drwx------ 3 root root 4096 Oct  8 17:48 ..
+lrwxrwxrwx 1 root root   41 Oct  8 17:48 cert.pem -> ../../archive/pbx.koaditech.com/cert1.pem
+lrwxrwxrwx 1 root root   42 Oct  8 17:48 chain.pem -> ../../archive/pbx.koaditech.com/chain1.pem
+lrwxrwxrwx 1 root root   46 Oct  8 17:48 fullchain.pem -> ../../archive/pbx.koaditech.com/fullchain1.pem
+lrwxrwxrwx 1 root root   44 Oct  8 17:48 privkey.pem -> ../../archive/pbx.koaditech.com/privkey1.pem
+-rw-r--r-- 1 root root  692 Oct  8 17:48 README
+root@FusionPBX-Ubuntu-24:~# tail -100 /var/log/freeswitch/freeswitch.log | grep -i "wss\|7443\|ssl\|tls"
+root@FusionPBX-Ubuntu-24:~# systemctl status freeswitch
+● freeswitch.service - freeswitch
+     Loaded: loaded (/usr/lib/systemd/system/freeswitch.service; enabled; preset: enabled)
+     Active: active (running) since Wed 2025-10-08 17:51:36 UTC; 8min ago
+    Process: 2135503 ExecStartPre=/bin/mkdir -p /var/run/freeswitch/ (code=exited, status=0/SUCCESS)
+    Process: 2135506 ExecStartPre=/bin/chown -R www-data:www-data /var/run/freeswitch/ (code=exited, status=0/SUCCESS)
+    Process: 2135508 ExecStart=/usr/bin/freeswitch -u www-data -g www-data -ncwait $DAEMON_OPTS (code=exited, status=0/SUCCESS)
+   Main PID: 2135509 (freeswitch)
+      Tasks: 37 (limit: 2260)
+     Memory: 41.3M (peak: 41.8M)
+        CPU: 9.771s
+     CGroup: /system.slice/freeswitch.service
+             └─2135509 /usr/bin/freeswitch -u www-data -g www-data -ncwait -nonat -ncwait -u www-data -g www-data -run /var/run/freeswitch
+
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.701262 0.00% [CONSOLE] switch_loadable_module.c:149 Starting runtime thread for mod_ev>
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.701379 0.00% [CONSOLE] switch_loadable_module.c:149 Starting runtime thread for CORE_S>
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.704776 100.00% [CONSOLE] switch_core.c:1593 Created ip list Home IP Address default (d>
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.704794 100.00% [CONSOLE] switch_core.c:1593 Created ip list providers default (deny)
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.709353 100.00% [WARNING] switch_core.c:1644 Cannot locate domain pbx.koaditech.com
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.709367 100.00% [CONSOLE] switch_core.c:1593 Created ip list rfc1918 default (deny)
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.710321 100.00% [WARNING] switch_core.c:2286 Implicitly setting events-use-dispatch bas>
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135509]: 2025-10-08 17:51:36.710332 100.00% [WARNING] switch_core.c:2294 This value cannot be higher than 1 so sett>
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 freeswitch[2135508]: FreeSWITCH[2135508] System Ready pid:2135509
+Oct 08 17:51:36 FusionPBX-Ubuntu-24 systemd[1]: Started freeswitch.service - freeswitch.
+root@FusionPBX-Ubuntu-24:~#

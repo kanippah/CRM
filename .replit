@@ -1,7 +1,6 @@
-modules = ["php-8.4", "postgresql-16", "python-3.11"]
+modules = ["php-8.4", "postgresql-16"]
 [agent]
 expertMode = true
-integrations = ["twilio:1.0.0"]
 
 [workflows]
 runButton = "Project"
@@ -30,10 +29,6 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 44839
-externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
