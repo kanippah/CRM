@@ -391,6 +391,9 @@ if (isset($_GET['api'])) {
       case 'import': api_import(); break;
       case 'reset': api_reset(); break;
       
+      case 'twilio.call': api_twilio_call(); break;
+      case 'twilio.status': api_twilio_status(); break;
+      
       default: respond(['error' => 'Unknown action'], 404);
     }
   } catch (Throwable $e) {
@@ -1443,6 +1446,127 @@ function api_reset() {
   require_admin();
   $p = db();
   $p->exec("TRUNCATE calls, projects, contacts, settings RESTART IDENTITY CASCADE");
+  respond(['ok' => true]);
+}
+
+function api_twilio_call() {
+  require_auth();
+  $b = body_json();
+  $p = db();
+  
+  $to_number = $b['to_number'] ?? '';
+  $contact_id = (int)($b['contact_id'] ?? 0);
+  $lead_id = isset($b['lead_id']) ? (int)$b['lead_id'] : null;
+  $user_id = $_SESSION['user_id'];
+  
+  $stmt = $p->prepare("SELECT phone_number FROM users WHERE id=:id");
+  $stmt->execute([':id' => $user_id]);
+  $user = $stmt->fetch();
+  
+  if (!$user || !$user['phone_number']) {
+    respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
+  }
+  
+  $from_number = $user['phone_number'];
+  $callback_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . 
+                  $_SERVER['HTTP_HOST'] . '/?api=twilio.status';
+  
+  $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
+  
+  $data = [
+    'From' => $from_number,
+    'To' => $to_number,
+    'Url' => 'http://demo.twilio.com/docs/voice.xml',
+    'StatusCallback' => $callback_url,
+    'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
+    'Record' => 'true'
+  ];
+  
+  $auth = base64_encode(getenv('TWILIO_ACCOUNT_SID') . ':' . getenv('TWILIO_AUTH_TOKEN'));
+  
+  $ch = curl_init($twilio_url);
+  curl_setopt($ch, CURLOPT_POST, true);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Authorization: Basic ' . $auth,
+    'Content-Type: application/x-www-form-urlencoded'
+  ]);
+  
+  $response = curl_exec($ch);
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  
+  if ($http_code != 201 && $http_code != 200) {
+    error_log("Twilio API error: " . $response);
+    respond(['error' => 'Failed to initiate call', 'detail' => $response], 500);
+  }
+  
+  $twilio_response = json_decode($response, true);
+  $call_sid = $twilio_response['sid'] ?? '';
+  
+  $stmt = $p->prepare("INSERT INTO calls (contact_id, when_at, outcome, notes, assigned_to, twilio_call_sid, twilio_status, created_at, updated_at) 
+                       VALUES (:cid, :w, :o, :n, :a, :sid, :status, :c, :u) RETURNING *");
+  $now = date('c');
+  $stmt->execute([
+    ':cid' => $contact_id,
+    ':w' => $now,
+    ':o' => 'initiated',
+    ':n' => 'Outbound call to ' . $to_number,
+    ':a' => $user_id,
+    ':sid' => $call_sid,
+    ':status' => 'initiated',
+    ':c' => $now,
+    ':u' => $now
+  ]);
+  
+  $call = $stmt->fetch();
+  
+  respond(['ok' => true, 'call' => $call, 'twilio' => $twilio_response]);
+}
+
+function api_twilio_status() {
+  $call_sid = $_POST['CallSid'] ?? '';
+  $call_status = $_POST['CallStatus'] ?? '';
+  $call_duration = $_POST['CallDuration'] ?? 0;
+  $recording_url = $_POST['RecordingUrl'] ?? '';
+  
+  if (!$call_sid) {
+    respond(['ok' => false]);
+  }
+  
+  $p = db();
+  $stmt = $p->prepare("SELECT id FROM calls WHERE twilio_call_sid=:sid");
+  $stmt->execute([':sid' => $call_sid]);
+  $call = $stmt->fetch();
+  
+  if (!$call) {
+    error_log("Twilio callback: Call not found for SID: $call_sid");
+    respond(['ok' => false]);
+  }
+  
+  $outcome = $call_status;
+  if ($call_status === 'completed') {
+    $outcome = 'answered';
+  } elseif (in_array($call_status, ['busy', 'no-answer', 'failed', 'canceled'])) {
+    $outcome = 'no-answer';
+  }
+  
+  $duration_min = $call_duration > 0 ? ceil($call_duration / 60) : 0;
+  
+  $update_stmt = $p->prepare("UPDATE calls SET twilio_status=:status, outcome=:outcome, duration_min=:dur, 
+                               twilio_recording_url=:rec, updated_at=:u WHERE id=:id");
+  $update_stmt->execute([
+    ':status' => $call_status,
+    ':outcome' => $outcome,
+    ':dur' => $duration_min,
+    ':rec' => $recording_url,
+    ':u' => date('c'),
+    ':id' => $call['id']
+  ]);
+  
+  error_log("Twilio callback: Updated call {$call['id']} with status $call_status, duration $call_duration");
+  
   respond(['ok' => true]);
 }
 
