@@ -398,7 +398,7 @@ if (isset($_GET['api'])) {
       case 'reset': api_reset(); break;
       
       case 'twilio.call': api_twilio_call(); break;
-      case 'twilio.twiml': api_twilio_twiml(); break;
+      case 'twilio.bridge': api_twilio_bridge(); break;
       case 'twilio.status': api_twilio_status(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
@@ -1492,21 +1492,21 @@ function api_twilio_call() {
     respond(['error' => 'No phone number assigned to your account. Please contact admin.'], 400);
   }
   
-  $from_number = $user['phone_number']; // DID for caller ID
+  $user_did = $user['phone_number']; // DID to call first
   $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
   $callback_url = $base_url . '/?api=twilio.status';
-  $twiml_url = $base_url . '/?api=twilio.twiml';
+  $twiml_url = $base_url . '/?api=twilio.bridge&contact=' . urlencode($to_number) . '&from=' . urlencode($user_did);
   
   $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
   
-  // Direct outbound call to contact with DID as caller ID
+  // Step 1: Call the user's DID first, when they answer, bridge to contact
   $data = [
-    'From' => $from_number,
-    'To' => $to_number,
+    'From' => $user_did,
+    'To' => $user_did,
     'Url' => $twiml_url,
     'StatusCallback' => $callback_url,
     'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
-    'Record' => 'true'
+    'Record' => 'record-from-answer'
   ];
   
   $auth = base64_encode(getenv('TWILIO_ACCOUNT_SID') . ':' . getenv('TWILIO_AUTH_TOKEN'));
@@ -1552,13 +1552,18 @@ function api_twilio_call() {
   respond(['ok' => true, 'call' => $call, 'twilio' => $twilio_response]);
 }
 
-function api_twilio_twiml() {
-  // Simple TwiML that just plays ringing tone - call will be answered automatically
+function api_twilio_bridge() {
+  // TwiML to bridge user to contact when they answer their DID
+  $contact_number = $_GET['contact'] ?? '';
+  $from_number = $_GET['from'] ?? '';
+  
   header('Content-Type: application/xml');
   echo '<?xml version="1.0" encoding="UTF-8"?>';
   echo '<Response>';
-  echo '  <Say voice="alice">This is a call from Koadi Technology CRM.</Say>';
-  echo '  <Pause length="3600"/>';
+  echo '  <Say voice="alice">Connecting you to the contact now.</Say>';
+  echo '  <Dial callerId="' . htmlspecialchars($from_number) . '" record="record-from-answer">';
+  echo '    <Number>' . htmlspecialchars($contact_number) . '</Number>';
+  echo '  </Dial>';
   echo '</Response>';
   exit;
 }
@@ -3592,7 +3597,7 @@ if (isset($_GET['background'])) {
         });
         
         if (response.ok) {
-          alert('Call initiated successfully! The contact will receive a call from your DID and the call will be logged automatically.');
+          alert('Call initiated! Your DID will ring - answer it to be connected to the contact.');
           // Only reload calls if we're on the calls view
           if (currentView === 'calls') {
             await loadCalls();
