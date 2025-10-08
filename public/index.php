@@ -2498,13 +2498,13 @@ if (isset($_GET['background'])) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + view).classList.add('active');
       
-      if (view === 'dashboard') renderDashboard();
-      if (view === 'contacts') renderContacts();
-      if (view === 'calls') renderCalls();
-      if (view === 'projects') renderProjects();
-      if (view === 'leads') renderLeads();
-      if (view === 'users') renderUsers();
-      if (view === 'settings') renderSettings();
+      if (view === 'dashboard') renderDashboard().catch(e => console.error('Dashboard render error:', e));
+      if (view === 'contacts') renderContacts().catch(e => console.error('Contacts render error:', e));
+      if (view === 'calls') renderCalls().catch(e => console.error('Calls render error:', e));
+      if (view === 'projects') renderProjects().catch(e => console.error('Projects render error:', e));
+      if (view === 'leads') renderLeads().catch(e => console.error('Leads render error:', e));
+      if (view === 'users') renderUsers().catch(e => console.error('Users render error:', e));
+      if (view === 'settings') renderSettings().catch(e => console.error('Settings render error:', e));
     }
     
     async function renderLeads() {
