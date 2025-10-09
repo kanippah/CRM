@@ -2354,7 +2354,8 @@ if (isset($_GET['background'])) {
         });
         
       } catch (error) {
-        console.error('Failed to initialize Twilio:', error);
+        console.log('Twilio not configured - calling features disabled');
+        twilioDevice = null;
       }
     }
     
