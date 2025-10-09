@@ -1464,11 +1464,12 @@ function api_twilio_token() {
   
   // Get Twilio credentials - prioritize environment variables, fallback to database settings
   $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $api_key = getenv('TWILIO_API_KEY') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_key'")->fetchColumn();
+  $api_secret = getenv('TWILIO_API_SECRET') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_secret'")->fetchColumn();
   $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
   
-  if (!$account_sid || !$auth_token || !$twiml_app_sid) {
-    respond(['error' => 'Twilio not configured. Please contact administrator.'], 400);
+  if (!$account_sid || !$api_key || !$api_secret || !$twiml_app_sid) {
+    respond(['error' => 'Twilio not configured. Admin must set up API Key and API Secret in settings.'], 400);
   }
   
   // Get user's caller ID
@@ -1480,11 +1481,11 @@ function api_twilio_token() {
     respond(['error' => 'No caller ID assigned. Please contact administrator.'], 400);
   }
   
-  // Generate Twilio access token
+  // Generate Twilio access token (must be signed with API Secret, not Auth Token!)
   $identity = $_SESSION['username'];
   $token_data = [
-    'jti' => $account_sid . '-' . time(),
-    'iss' => $account_sid,
+    'jti' => $api_key . '-' . time(),
+    'iss' => $api_key,  // API Key SID (not Account SID)
     'sub' => $account_sid,
     'nbf' => time(),
     'exp' => time() + 3600, // 1 hour expiry
@@ -1510,7 +1511,7 @@ function api_twilio_token() {
   
   $header = base64url_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
   $payload = base64url_encode(json_encode($token_data));
-  $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", $auth_token, true));
+  $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", $api_secret, true));
   $jwt = "$header.$payload.$signature";
   
   respond([
@@ -1587,6 +1588,8 @@ function api_twilio_settings_get() {
   // Get Twilio credentials - prioritize environment variables, fallback to database settings
   $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
   $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $api_key = getenv('TWILIO_API_KEY') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_key'")->fetchColumn();
+  $api_secret = getenv('TWILIO_API_SECRET') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_secret'")->fetchColumn();
   $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
   
   // Show if using env vars
@@ -1594,7 +1597,9 @@ function api_twilio_settings_get() {
   
   respond([
     'account_sid' => $account_sid ?: '',
-    'auth_token' => $auth_token ? '••••••••' : '', // Mask the token
+    'auth_token' => $auth_token ? '••••••••' : '', // Mask the token (still needed for REST API)
+    'api_key' => $api_key ?: '',
+    'api_secret' => $api_secret ? '••••••••' : '', // Mask the secret
     'twiml_app_sid' => $twiml_app_sid ?: '',
     'using_env_vars' => $using_env
   ]);
@@ -1613,6 +1618,16 @@ function api_twilio_settings_set() {
   if (isset($b['auth_token']) && $b['auth_token'] !== '••••••••') {
     $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_auth_token', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
       ->execute([':v' => $b['auth_token']]);
+  }
+  
+  if (isset($b['api_key'])) {
+    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_api_key', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
+      ->execute([':v' => $b['api_key']]);
+  }
+  
+  if (isset($b['api_secret']) && $b['api_secret'] !== '••••••••') {
+    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_api_secret', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
+      ->execute([':v' => $b['api_secret']]);
   }
   
   if (isset($b['twiml_app_sid'])) {
@@ -4503,9 +4518,19 @@ if (isset($_GET['background'])) {
             <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
           </div>
           <div class="form-group">
-            <label>Auth Token *</label>
+            <label>Auth Token * <span style="color: var(--muted); font-weight: normal;">(for REST API)</span></label>
             <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" ${settings.using_env_vars ? 'readonly' : 'required'}>
             <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
+          </div>
+          <div class="form-group">
+            <label>API Key SID * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
+            <input type="text" name="api_key" value="${settings.api_key || ''}" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ${settings.using_env_vars ? 'readonly' : 'required'}>
+            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Create at console.twilio.com/project/api-keys'}</small>
+          </div>
+          <div class="form-group">
+            <label>API Secret * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
+            <input type="text" name="api_secret" value="${settings.api_secret || ''}" placeholder="Your API secret" ${settings.using_env_vars ? 'readonly' : 'required'}>
+            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Shown only once when creating API Key'}</small>
           </div>
           <div class="form-group">
             <label>TwiML App SID *</label>
@@ -4516,6 +4541,7 @@ if (isset($_GET['background'])) {
             <h4 style="margin: 0 0 8px 0;">Setup Instructions:</h4>
             <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted);">
               <li>Create a Twilio account at twilio.com</li>
+              <li><strong>Create API Key:</strong> Go to console.twilio.com/project/api-keys → Create API Key → Copy SID & Secret</li>
               <li>Create a TwiML Application in Console</li>
               <li>Set webhook URL to: <code style="background: var(--panel); padding: 2px 6px; border-radius: 3px;">${window.location.origin}/?api=twilio.webhook</code></li>
               <li>Assign phone numbers (Caller IDs) to users in Users section</li>
@@ -4534,6 +4560,8 @@ if (isset($_GET['background'])) {
       const data = {
         account_sid: form.account_sid.value.trim(),
         auth_token: form.auth_token.value.trim(),
+        api_key: form.api_key.value.trim(),
+        api_secret: form.api_secret.value.trim(),
         twiml_app_sid: form.twiml_app_sid.value.trim()
       };
       
