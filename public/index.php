@@ -2390,6 +2390,15 @@ if (isset($_GET['background'])) {
       }
       
       try {
+        // Request microphone permission first
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('Microphone permission granted');
+        } catch (err) {
+          console.log('Microphone permission denied or unavailable:', err);
+          return;
+        }
+        
         const tokenData = await api('twilio.token');
         
         if (!tokenData || !tokenData.token) {
