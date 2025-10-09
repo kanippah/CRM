@@ -388,6 +388,11 @@ if (isset($_GET['api'])) {
       case 'import': api_import(); break;
       case 'reset': api_reset(); break;
       
+      case 'twilio.token': api_twilio_token(); break;
+      case 'twilio.webhook': api_twilio_webhook(); break;
+      case 'twilio.settings.get': api_twilio_settings_get(); break;
+      case 'twilio.settings.set': api_twilio_settings_set(); break;
+      
       default: respond(['error' => 'Unknown action'], 404);
     }
   } catch (Throwable $e) {
@@ -1440,6 +1445,162 @@ function api_reset() {
   require_admin();
   $p = db();
   $p->exec("TRUNCATE calls, projects, contacts, settings RESTART IDENTITY CASCADE");
+  respond(['ok' => true]);
+}
+
+function api_twilio_token() {
+  require_auth();
+  $pdo = db();
+  
+  // Get Twilio credentials from settings
+  $account_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
+  $auth_token = $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $twiml_app_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  
+  if (!$account_sid || !$auth_token || !$twiml_app_sid) {
+    respond(['error' => 'Twilio not configured. Please contact administrator.'], 400);
+  }
+  
+  // Get user's caller ID
+  $user_id = $_SESSION['user_id'];
+  $user = $pdo->query("SELECT caller_id FROM users WHERE id={$user_id}")->fetch();
+  $caller_id = $user['caller_id'] ?? '';
+  
+  if (!$caller_id) {
+    respond(['error' => 'No caller ID assigned. Please contact administrator.'], 400);
+  }
+  
+  // Generate Twilio access token
+  $identity = $_SESSION['username'];
+  $token_data = [
+    'jti' => $account_sid . '-' . time(),
+    'iss' => $account_sid,
+    'sub' => $account_sid,
+    'nbf' => time(),
+    'exp' => time() + 3600, // 1 hour expiry
+    'grants' => [
+      'identity' => $identity,
+      'voice' => [
+        'incoming' => ['allow' => true],
+        'outgoing' => [
+          'application_sid' => $twiml_app_sid,
+          'params' => [
+            'From' => $caller_id,
+            'userId' => $user_id
+          ]
+        ]
+      ]
+    ]
+  ];
+  
+  // Create JWT token (simple base64 encoding for now - in production use proper JWT library)
+  $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+  $payload = base64_encode(json_encode($token_data));
+  $signature = base64_encode(hash_hmac('sha256', "$header.$payload", $auth_token, true));
+  $jwt = "$header.$payload.$signature";
+  
+  respond([
+    'token' => $jwt,
+    'identity' => $identity,
+    'caller_id' => $caller_id
+  ]);
+}
+
+function api_twilio_webhook() {
+  // Twilio webhook to receive call status updates
+  $call_sid = $_POST['CallSid'] ?? '';
+  $call_status = $_POST['CallStatus'] ?? '';
+  $call_duration = (int)($_POST['CallDuration'] ?? 0);
+  $recording_url = $_POST['RecordingUrl'] ?? '';
+  $to_number = $_POST['To'] ?? '';
+  $user_id = (int)($_POST['userId'] ?? 0);
+  
+  if (!$call_sid) {
+    respond(['error' => 'Missing CallSid'], 400);
+  }
+  
+  $pdo = db();
+  
+  // Find contact by phone number
+  $contact = null;
+  if ($to_number) {
+    $normalized = preg_replace('/\D+/', '', $to_number);
+    $stmt = $pdo->prepare("SELECT id FROM contacts WHERE regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,''), '\\D', '', 'g') = :phone LIMIT 1");
+    $stmt->execute([':phone' => $normalized]);
+    $contact = $stmt->fetch();
+  }
+  
+  // Update or create call log
+  if ($call_status === 'completed') {
+    $contact_id = $contact ? $contact['id'] : null;
+    $duration_min = ceil($call_duration / 60);
+    $when_at = date('c');
+    
+    // Check if call already exists
+    $existing = $pdo->prepare("SELECT id FROM calls WHERE twilio_call_sid = :sid");
+    $existing->execute([':sid' => $call_sid]);
+    $call = $existing->fetch();
+    
+    if ($call) {
+      // Update existing call
+      $pdo->prepare("UPDATE calls SET duration_min = :dur, recording_url = :rec, outcome = 'Completed' WHERE id = :id")
+        ->execute([':dur' => $duration_min, ':rec' => $recording_url, ':id' => $call['id']]);
+    } else {
+      // Create new call log
+      $pdo->prepare("INSERT INTO calls (contact_id, when_at, outcome, duration_min, recording_url, twilio_call_sid, assigned_to, notes) VALUES (:cid, :when, 'Completed', :dur, :rec, :sid, :uid, :notes)")
+        ->execute([
+          ':cid' => $contact_id,
+          ':when' => $when_at,
+          ':dur' => $duration_min,
+          ':rec' => $recording_url,
+          ':sid' => $call_sid,
+          ':uid' => $user_id,
+          ':notes' => 'Called from CRM to ' . $to_number
+        ]);
+    }
+  }
+  
+  // Return TwiML response
+  header('Content-Type: text/xml');
+  echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+  exit;
+}
+
+function api_twilio_settings_get() {
+  require_admin();
+  $pdo = db();
+  
+  $account_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
+  $auth_token = $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $twiml_app_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  
+  respond([
+    'account_sid' => $account_sid ?: '',
+    'auth_token' => $auth_token ? '••••••••' : '', // Mask the token
+    'twiml_app_sid' => $twiml_app_sid ?: ''
+  ]);
+}
+
+function api_twilio_settings_set() {
+  require_admin();
+  $pdo = db();
+  $b = body_json();
+  
+  if (isset($b['account_sid'])) {
+    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_account_sid', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
+      ->execute([':v' => $b['account_sid']]);
+  }
+  
+  if (isset($b['auth_token']) && $b['auth_token'] !== '••••••••') {
+    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_auth_token', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
+      ->execute([':v' => $b['auth_token']]);
+  }
+  
+  if (isset($b['twiml_app_sid'])) {
+    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_twiml_app_sid', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
+      ->execute([':v' => $b['twiml_app_sid']]);
+  }
+  
   respond(['ok' => true]);
 }
 
