@@ -723,8 +723,8 @@ function api_users_save() {
   }
   
   if ($id) {
-    // Handle caller_id-only update
-    if (isset($b['caller_id']) && !$email && !$full_name && !$role) {
+    // Handle caller_id-only update (check if only id and caller_id are provided)
+    if (isset($b['caller_id']) && !isset($b['email']) && !isset($b['full_name']) && !isset($b['role']) && !isset($b['password'])) {
       $stmt = $pdo->prepare("UPDATE users SET caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
       $stmt->execute([':cid' => $caller_id, ':id' => $id]);
       $user = $stmt->fetch();
