@@ -1690,7 +1690,7 @@ if (isset($_GET['background'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Koadi Technology CRM</title>
   <link rel="icon" href="?favicon" type="image/png">
-  <script src="https://sdk.twilio.com/js/client/v1.14/twilio.min.js"></script>
+  <script src="https://sdk.twilio.com/js/voice-sdk/releases/2.11.1/twilio.min.js"></script>
   <style>
     :root {
       --kt-orange: #FF8C42;
