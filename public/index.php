@@ -392,6 +392,7 @@ if (isset($_GET['api'])) {
       case 'twilio.webhook': api_twilio_webhook(); break;
       case 'twilio.settings.get': api_twilio_settings_get(); break;
       case 'twilio.settings.set': api_twilio_settings_set(); break;
+      case 'twilio.numbers': api_twilio_numbers(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -1611,6 +1612,48 @@ function api_twilio_settings_set() {
   }
   
   respond(['ok' => true]);
+}
+
+function api_twilio_numbers() {
+  require_admin();
+  $pdo = db();
+  
+  // Get Twilio credentials
+  $account_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
+  $auth_token = $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  
+  if (!$account_sid || !$auth_token) {
+    respond(['error' => 'Twilio not configured'], 400);
+  }
+  
+  // Fetch phone numbers from Twilio API
+  $url = "https://api.twilio.com/2010-04-01/Accounts/{$account_sid}/IncomingPhoneNumbers.json";
+  
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_USERPWD, "$account_sid:$auth_token");
+  curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+  
+  $response = curl_exec($ch);
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  
+  if ($http_code !== 200) {
+    respond(['error' => 'Failed to fetch numbers from Twilio'], 400);
+  }
+  
+  $data = json_decode($response, true);
+  $numbers = [];
+  
+  foreach ($data['incoming_phone_numbers'] ?? [] as $num) {
+    $numbers[] = [
+      'phone_number' => $num['phone_number'],
+      'friendly_name' => $num['friendly_name']
+    ];
+  }
+  
+  respond(['numbers' => $numbers]);
 }
 
 if (isset($_GET['logo'])) {
