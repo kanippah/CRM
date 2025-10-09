@@ -4441,18 +4441,29 @@ if (isset($_GET['background'])) {
     async function openTwilioSettings() {
       const settings = await api('twilio.settings.get');
       
+      const envVarNotice = settings.using_env_vars ? `
+        <div style="background: #0066CC20; border: 1px solid #0066CC; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+          <strong>✅ Using Replit Environment Variables</strong>
+          <p style="margin: 8px 0 0 0; font-size: 13px; color: var(--muted);">
+            Twilio credentials are loaded from Replit secrets (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN).
+            ${!settings.twiml_app_sid ? 'You still need to set the TwiML App SID below.' : 'TwiML App SID can be set below or via TWILIO_TWIML_APP_SID secret.'}
+          </p>
+        </div>
+      ` : '';
+      
       showModal(`
         <h3>📞 Twilio Calling Configuration</h3>
+        ${envVarNotice}
         <form onsubmit="saveTwilioSettings(event)">
           <div class="form-group">
             <label>Account SID *</label>
-            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
-            <small style="color: var(--muted);">Find this in your Twilio Console</small>
+            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ${settings.using_env_vars ? 'readonly' : 'required'}>
+            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
           </div>
           <div class="form-group">
             <label>Auth Token *</label>
-            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" required>
-            <small style="color: var(--muted);">Find this in your Twilio Console</small>
+            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" ${settings.using_env_vars ? 'readonly' : 'required'}>
+            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
           </div>
           <div class="form-group">
             <label>TwiML App SID *</label>
