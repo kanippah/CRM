@@ -1462,10 +1462,10 @@ function api_twilio_token() {
   require_auth();
   $pdo = db();
   
-  // Get Twilio credentials from settings
-  $account_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $auth_token = $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
-  $twiml_app_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  // Get Twilio credentials - prioritize environment variables, fallback to database settings
+  $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
+  $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
   
   if (!$account_sid || !$auth_token || !$twiml_app_sid) {
     respond(['error' => 'Twilio not configured. Please contact administrator.'], 400);
