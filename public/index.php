@@ -1677,6 +1677,12 @@ if (isset($_GET['favicon'])) {
   exit;
 }
 
+if (isset($_GET['twilio-sdk'])) {
+  header('Content-Type: application/javascript');
+  readfile(__DIR__ . '/twilio.min.js');
+  exit;
+}
+
 if (isset($_GET['background'])) {
   header('Content-Type: image/jpeg');
   readfile('background.jpg');
@@ -1690,7 +1696,7 @@ if (isset($_GET['background'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Koadi Technology CRM</title>
   <link rel="icon" href="?favicon" type="image/png">
-  <script src="https://sdk.twilio.com/js/voice-sdk/releases/2.11.1/twilio.min.js"></script>
+  <script src="?twilio-sdk"></script>
   <style>
     :root {
       --kt-orange: #FF8C42;
@@ -2370,10 +2376,27 @@ if (isset($_GET['background'])) {
     
     // Initialize Twilio Device
     async function initTwilioDevice() {
-      if (!currentUser || typeof Twilio === 'undefined' || !Twilio.Device) return;
+      const twilioLoaded = typeof Twilio !== 'undefined';
+      console.log('Init Twilio - User:', currentUser?.email, 'SDK loaded:', twilioLoaded);
+      
+      if (!currentUser) {
+        console.log('No user logged in');
+        return;
+      }
+      
+      if (!twilioLoaded || !Twilio.Device) {
+        console.log('Twilio SDK not available');
+        return;
+      }
       
       try {
         const tokenData = await api('twilio.token');
+        
+        if (!tokenData || !tokenData.token) {
+          console.log('No Twilio token received');
+          return;
+        }
+        
         twilioDevice = new Twilio.Device(tokenData.token, {
           codecPreferences: ['opus', 'pcmu'],
           logLevel: 1
@@ -2385,14 +2408,12 @@ if (isset($_GET['background'])) {
         
         twilioDevice.on('error', (error) => {
           console.error('Twilio Device Error:', error);
-          alert('Call error: ' + error.message);
-          closeCallWidget();
         });
         
         twilioDevice.register();
         
       } catch (error) {
-        console.log('Twilio not configured - calling features disabled');
+        console.log('Twilio not configured - calling features disabled:', error);
         twilioDevice = null;
       }
     }
@@ -2413,7 +2434,7 @@ if (isset($_GET['background'])) {
         document.getElementById('callTimer').textContent = '00:00';
         document.getElementById('muteBtn').style.display = 'none';
         
-        // Make the call
+        // Make the call using SDK v2.x API
         const params = { To: phoneNumber };
         currentCall = await twilioDevice.connect({ params });
         
