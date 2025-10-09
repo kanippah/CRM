@@ -4514,23 +4514,23 @@ if (isset($_GET['background'])) {
         <form onsubmit="saveTwilioSettings(event)">
           <div class="form-group">
             <label>Account SID *</label>
-            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ${settings.using_env_vars ? 'readonly' : 'required'}>
-            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
+            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+            <small style="color: var(--muted);">Find this in your Twilio Console</small>
           </div>
           <div class="form-group">
             <label>Auth Token * <span style="color: var(--muted); font-weight: normal;">(for REST API)</span></label>
-            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" ${settings.using_env_vars ? 'readonly' : 'required'}>
-            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Find this in your Twilio Console'}</small>
+            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" required>
+            <small style="color: var(--muted);">Find this in your Twilio Console</small>
           </div>
           <div class="form-group">
             <label>API Key SID * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
-            <input type="text" name="api_key" value="${settings.api_key || ''}" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ${settings.using_env_vars ? 'readonly' : 'required'}>
-            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Create at console.twilio.com/project/api-keys'}</small>
+            <input type="text" name="api_key" value="${settings.api_key || ''}" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+            <small style="color: var(--muted);">Create at console.twilio.com/project/api-keys</small>
           </div>
           <div class="form-group">
             <label>API Secret * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
-            <input type="text" name="api_secret" value="${settings.api_secret || ''}" placeholder="Your API secret" ${settings.using_env_vars ? 'readonly' : 'required'}>
-            <small style="color: var(--muted);">${settings.using_env_vars ? 'Loaded from Replit environment variable' : 'Shown only once when creating API Key'}</small>
+            <input type="text" name="api_secret" value="${settings.api_secret || ''}" placeholder="Your API secret" required>
+            <small style="color: var(--muted);">Shown only once when creating API Key</small>
           </div>
           <div class="form-group">
             <label>TwiML App SID *</label>
