@@ -1580,14 +1580,19 @@ function api_twilio_settings_get() {
   require_admin();
   $pdo = db();
   
-  $account_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $auth_token = $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
-  $twiml_app_sid = $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  // Get Twilio credentials - prioritize environment variables, fallback to database settings
+  $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
+  $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  
+  // Show if using env vars
+  $using_env = getenv('TWILIO_ACCOUNT_SID') ? true : false;
   
   respond([
     'account_sid' => $account_sid ?: '',
     'auth_token' => $auth_token ? '••••••••' : '', // Mask the token
-    'twiml_app_sid' => $twiml_app_sid ?: ''
+    'twiml_app_sid' => $twiml_app_sid ?: '',
+    'using_env_vars' => $using_env
   ]);
 }
 
