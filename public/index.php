@@ -680,7 +680,7 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, status, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, caller_id, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
   $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
@@ -697,42 +697,51 @@ function api_users_save() {
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
+  $caller_id = isset($b['caller_id']) ? trim($b['caller_id']) : null;
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
   
-  // Validate email format
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+  // Validate email format if email is provided
+  if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respond(['error' => 'Invalid email format'], 400);
   }
   
   // Check if email already exists (excluding current user if editing)
-  if ($id) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e) AND id != :id");
-    $stmt->execute([':e' => $email, ':id' => $id]);
-  } else {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
-    $stmt->execute([':e' => $email]);
-  }
-  if ($stmt->fetch()) {
-    respond(['error' => 'Email already exists'], 400);
+  if ($email) {
+    if ($id) {
+      $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e) AND id != :id");
+      $stmt->execute([':e' => $email, ':id' => $id]);
+    } else {
+      $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
+      $stmt->execute([':e' => $email]);
+    }
+    if ($stmt->fetch()) {
+      respond(['error' => 'Email already exists'], 400);
+    }
   }
   
   if ($id) {
-    if ($password) {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p WHERE id=:id RETURNING id, username, email, full_name, role");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':id' => $id]);
+    // Handle caller_id-only update
+    if (isset($b['caller_id']) && !$email && !$full_name && !$role) {
+      $stmt = $pdo->prepare("UPDATE users SET caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
+    } else if ($password) {
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
     } else {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r WHERE id=:id RETURNING id, username, email, full_name, role");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
     }
-    $user = $stmt->fetch();
   } else {
     if (!$password) {
       respond(['error' => 'Password is required for new users'], 400);
     }
-    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id, username, email, full_name, role");
-    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role]);
+    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, caller_id) VALUES (:e, :u, :p, :n, :r, :cid) RETURNING id, username, email, full_name, role, caller_id");
+    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':cid' => $caller_id]);
     $user = $stmt->fetch();
   }
   
@@ -3250,6 +3259,7 @@ if (isset($_GET['background'])) {
                 <th>Email</th>
                 <th>Full Name</th>
                 <th>Role</th>
+                <th>Caller ID</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -3274,6 +3284,7 @@ if (isset($_GET['background'])) {
               <td><strong>${item.email}</strong></td>
               <td><em>Pending invitation</em></td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td>-</td>
               <td><span class="badge" style="background: var(--kt-yellow); color: #000;">Invited</span></td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -3289,11 +3300,13 @@ if (isset($_GET['background'])) {
           const toggleBtn = item.id !== currentUser.id 
             ? `<button class="btn ${item.status === 'active' ? 'warning' : 'success'}" onclick="toggleUserStatus(${item.id})">${item.status === 'active' ? 'Deactivate' : 'Activate'}</button>` 
             : '';
+          const callerIdDisplay = item.caller_id || `<button class="btn" onclick="editCallerID(${item.id})">Set Caller ID</button>`;
           return `
             <tr>
               <td><strong>${item.email || 'N/A'}</strong></td>
               <td>${item.full_name}</td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
+              <td>${callerIdDisplay}</td>
               <td>${statusBadge}</td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -3327,6 +3340,41 @@ if (isset($_GET['background'])) {
         await loadUsers();
       } catch (e) {
         alert('Error: ' + e.message);
+      }
+    }
+    
+    async function editCallerID(userId) {
+      const data = await api('users.list');
+      const user = data.items.find(u => u.id === userId);
+      const currentCallerID = user?.caller_id || '';
+      
+      showModal(`
+        <h3>Set Caller ID for ${user.full_name}</h3>
+        <form onsubmit="saveCallerID(event, ${userId})">
+          <div class="form-group">
+            <label>Caller ID (Phone Number) *</label>
+            <input type="text" name="caller_id" value="${currentCallerID}" placeholder="+12015551234" required>
+            <small style="color: var(--muted);">Format: +[country code][number] (e.g., +12015551234)</small>
+          </div>
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveCallerID(e, userId) {
+      e.preventDefault();
+      const caller_id = e.target.caller_id.value.trim();
+      
+      try {
+        await api('users.save', {
+          method: 'POST',
+          body: JSON.stringify({ id: userId, caller_id })
+        });
+        closeModal();
+        await loadUsers();
+      } catch (err) {
+        alert('Error: ' + err.message);
       }
     }
     
