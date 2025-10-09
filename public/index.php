@@ -1463,7 +1463,7 @@ function api_twilio_token() {
   // TEMPORARY: Hardcoded credentials to bypass environment caching
   $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
   $api_key = 'SK58cb9f53acf0acc86f8261ccb97b9100';
-  $api_secret = 'pLKwYjdqpc5LhvtLHExKPhqHmXVg7aF9';
+  $api_secret = 'pLKwYjdqpc5LhvtLHFxKPhqHmXVg7aF9';
   $twiml_app_sid = 'AP813c0a67a91a08ee56e34e42194ad36b';
   
   if (!$account_sid || !$api_key || !$api_secret || !$twiml_app_sid) {
