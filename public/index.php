@@ -2873,10 +2873,12 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
+        const phoneDisplay = isHidden ? '***' : (lead.phone ? makePhoneClickable('', lead.phone, lead.name) : '-');
+        
         return `
           <tr>
             <td>${nameDisplay}</td>
-            <td>${isHidden ? '***' : lead.phone}</td>
+            <td>${phoneDisplay}</td>
             <td>${lead.email}</td>
             <td>${lead.company || '-'}</td>
             <td>${lead.industry || '-'}</td>
@@ -3570,7 +3572,7 @@ if (isset($_GET['background'])) {
             <td>${nameDisplay}</td>
             <td>${c.company || '-'}</td>
             <td>${c.type || 'Individual'}</td>
-            <td>${(c.phone_country||'') + ' ' + (c.phone_number||'')}</td>
+            <td>${c.phone_number ? makePhoneClickable(c.phone_country, c.phone_number, c.name || c.company) : '-'}</td>
             <td>${c.email || '-'}</td>
             <td>${c.industry || '-'}</td>
             ${isAdmin ? `<td>${c.assigned_user || '<em style="color: var(--muted);">Unassigned</em>'}</td>` : ''}
