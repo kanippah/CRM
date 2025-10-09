@@ -2470,7 +2470,8 @@ if (isset($_GET['background'])) {
         
       } catch (error) {
         console.error('Call failed:', error);
-        alert('Failed to make call: ' + error.message);
+        const errorMsg = error?.message || 'Twilio credentials invalid. Please contact administrator to verify Account SID, Auth Token, and TwiML App SID.';
+        alert('Failed to make call: ' + errorMsg);
         closeCallWidget();
       }
     }
