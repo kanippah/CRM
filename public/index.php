@@ -1629,6 +1629,7 @@ if (isset($_GET['background'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Koadi Technology CRM</title>
   <link rel="icon" href="?favicon" type="image/png">
+  <script src="https://sdk.twilio.com/js/client/v1.14/twilio.min.js"></script>
   <style>
     :root {
       --kt-orange: #FF8C42;
@@ -2133,10 +2134,161 @@ if (isset($_GET['background'])) {
       .app { flex-direction: column; }
       .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
     }
+    
+    /* Twilio Call Widget */
+    .call-widget {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      display: none;
+      padding: 16px;
+    }
+    
+    .call-widget.active {
+      display: block;
+    }
+    
+    .call-widget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .call-widget-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .call-widget-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+    }
+    
+    .call-widget-body {
+      text-align: center;
+    }
+    
+    .call-number {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    
+    .call-contact-name {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    
+    .call-status {
+      font-size: 14px;
+      color: var(--brand);
+      margin-bottom: 8px;
+    }
+    
+    .call-timer {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+    
+    .call-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    
+    .call-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .call-btn-primary {
+      background: var(--brand);
+      color: white;
+    }
+    
+    .call-btn-primary:hover {
+      background: var(--brand-hover);
+    }
+    
+    .call-btn-secondary {
+      background: var(--muted);
+      color: white;
+    }
+    
+    .call-btn-secondary:hover {
+      opacity: 0.8;
+    }
+    
+    .call-btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+    
+    .call-btn-danger:hover {
+      background: #c82333;
+    }
+    
+    .phone-link {
+      color: var(--brand);
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .phone-link:hover {
+      text-decoration: underline;
+    }
+    
+    .phone-link::before {
+      content: "📞";
+      font-size: 14px;
+    }
   </style>
 </head>
 <body data-theme="dark">
   <div id="app"></div>
+  
+  <!-- Twilio Call Widget -->
+  <div id="callWidget" class="call-widget">
+    <div class="call-widget-header">
+      <div class="call-widget-title">Call</div>
+      <button class="call-widget-close" onclick="closeCallWidget()">×</button>
+    </div>
+    <div class="call-widget-body">
+      <div class="call-contact-name" id="callContactName"></div>
+      <div class="call-number" id="callNumber"></div>
+      <div class="call-status" id="callStatus">Connecting...</div>
+      <div class="call-timer" id="callTimer">00:00</div>
+      <div class="call-controls">
+        <button class="call-btn call-btn-secondary" id="muteBtn" onclick="toggleMute()" style="display:none;">Mute</button>
+        <button class="call-btn call-btn-danger" onclick="hangupCall()">Hang Up</button>
+      </div>
+    </div>
+  </div>
   
   <script>
     let currentUser = null;
@@ -2147,6 +2299,151 @@ if (isset($_GET['background'])) {
     let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
+    
+    // Twilio calling variables
+    let twilioDevice = null;
+    let currentCall = null;
+    let callTimer = null;
+    let callStartTime = null;
+    let isMuted = false;
+    
+    // Initialize Twilio Device
+    async function initTwilioDevice() {
+      if (!currentUser || typeof Twilio === 'undefined') return;
+      
+      try {
+        const tokenData = await api('twilio.token');
+        twilioDevice = new Twilio.Device(tokenData.token, {
+          codecPreferences: ['opus', 'pcmu'],
+          fakeLocalDTMF: true,
+          enableRingingState: true
+        });
+        
+        twilioDevice.on('ready', () => {
+          console.log('Twilio Device Ready');
+        });
+        
+        twilioDevice.on('error', (error) => {
+          console.error('Twilio Device Error:', error);
+          alert('Call error: ' + error.message);
+          closeCallWidget();
+        });
+        
+        twilioDevice.on('connect', (conn) => {
+          console.log('Call connected');
+          currentCall = conn;
+          updateCallStatus('Connected');
+          startCallTimer();
+          document.getElementById('muteBtn').style.display = 'inline-block';
+        });
+        
+        twilioDevice.on('disconnect', () => {
+          console.log('Call ended');
+          stopCallTimer();
+          closeCallWidget();
+          currentCall = null;
+        });
+        
+      } catch (error) {
+        console.error('Failed to initialize Twilio:', error);
+      }
+    }
+    
+    // Make a call
+    async function makeCall(phoneNumber, contactName = '') {
+      if (!twilioDevice) {
+        alert('Phone system not initialized. Please contact administrator.');
+        return;
+      }
+      
+      try {
+        // Show call widget
+        document.getElementById('callWidget').classList.add('active');
+        document.getElementById('callContactName').textContent = contactName;
+        document.getElementById('callNumber').textContent = phoneNumber;
+        document.getElementById('callStatus').textContent = 'Calling...';
+        document.getElementById('callTimer').textContent = '00:00';
+        document.getElementById('muteBtn').style.display = 'none';
+        
+        // Make the call
+        const params = { To: phoneNumber };
+        currentCall = twilioDevice.connect(params);
+        
+      } catch (error) {
+        console.error('Call failed:', error);
+        alert('Failed to make call: ' + error.message);
+        closeCallWidget();
+      }
+    }
+    
+    // Hangup call
+    function hangupCall() {
+      if (currentCall) {
+        currentCall.disconnect();
+      }
+      closeCallWidget();
+    }
+    
+    // Toggle mute
+    function toggleMute() {
+      if (!currentCall) return;
+      
+      isMuted = !isMuted;
+      currentCall.mute(isMuted);
+      
+      const muteBtn = document.getElementById('muteBtn');
+      if (isMuted) {
+        muteBtn.textContent = 'Unmute';
+        muteBtn.classList.remove('call-btn-secondary');
+        muteBtn.classList.add('call-btn-primary');
+      } else {
+        muteBtn.textContent = 'Mute';
+        muteBtn.classList.remove('call-btn-primary');
+        muteBtn.classList.add('call-btn-secondary');
+      }
+    }
+    
+    // Close call widget
+    function closeCallWidget() {
+      document.getElementById('callWidget').classList.remove('active');
+      stopCallTimer();
+      isMuted = false;
+      const muteBtn = document.getElementById('muteBtn');
+      muteBtn.textContent = 'Mute';
+      muteBtn.classList.remove('call-btn-primary');
+      muteBtn.classList.add('call-btn-secondary');
+    }
+    
+    // Update call status
+    function updateCallStatus(status) {
+      document.getElementById('callStatus').textContent = status;
+    }
+    
+    // Start call timer
+    function startCallTimer() {
+      callStartTime = Date.now();
+      callTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        document.getElementById('callTimer').textContent = `${minutes}:${seconds}`;
+      }, 1000);
+    }
+    
+    // Stop call timer
+    function stopCallTimer() {
+      if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+      }
+    }
+    
+    // Helper function to format phone for display
+    function makePhoneClickable(phoneCountry, phoneNumber, contactName = '') {
+      if (!phoneNumber) return '';
+      const fullNumber = (phoneCountry || '') + phoneNumber;
+      return `<a href="#" class="phone-link" onclick="event.preventDefault(); makeCall('${fullNumber}', '${contactName.replace(/'/g, "\\'")}')">${fullNumber}</a>`;
+    }
     
     async function api(endpoint, options = {}) {
       const res = await fetch(`?api=${endpoint}`, {
@@ -2441,6 +2738,9 @@ if (isset($_GET['background'])) {
       
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
       switchView(savedView);
+      
+      // Initialize Twilio device for calling
+      initTwilioDevice();
     }
     
     function switchView(view) {
