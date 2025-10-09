@@ -4320,6 +4320,13 @@ if (isset($_GET['background'])) {
         </div>
         ${isAdmin ? `
         <div class="card" style="margin-top: 16px;">
+          <h3>📞 Twilio Calling Settings</h3>
+          <button class="btn" onclick="openTwilioSettings()">Configure Twilio Credentials</button>
+          <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
+            Configure Twilio for browser-based calling. Users need to have Caller IDs assigned in the Users section.
+          </p>
+        </div>
+        <div class="card" style="margin-top: 16px;">
           <h3>Manage Industries</h3>
           <button class="btn" onclick="openIndustriesManagement()">Manage Industries</button>
         </div>
@@ -4344,6 +4351,64 @@ if (isset($_GET['background'])) {
         body: JSON.stringify({ key: 'defaultCountry', value })
       });
       alert('Default country saved');
+    }
+    
+    async function openTwilioSettings() {
+      const settings = await api('twilio.settings.get');
+      
+      showModal(`
+        <h3>📞 Twilio Calling Configuration</h3>
+        <form onsubmit="saveTwilioSettings(event)">
+          <div class="form-group">
+            <label>Account SID *</label>
+            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+            <small style="color: var(--muted);">Find this in your Twilio Console</small>
+          </div>
+          <div class="form-group">
+            <label>Auth Token *</label>
+            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" required>
+            <small style="color: var(--muted);">Find this in your Twilio Console</small>
+          </div>
+          <div class="form-group">
+            <label>TwiML App SID *</label>
+            <input type="text" name="twiml_app_sid" value="${settings.twiml_app_sid || ''}" placeholder="APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+            <small style="color: var(--muted);">Create a TwiML App in Twilio Console and paste the SID here</small>
+          </div>
+          <div style="background: var(--bg); padding: 12px; border-radius: 6px; margin-top: 16px;">
+            <h4 style="margin: 0 0 8px 0;">Setup Instructions:</h4>
+            <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted);">
+              <li>Create a Twilio account at twilio.com</li>
+              <li>Create a TwiML Application in Console</li>
+              <li>Set webhook URL to: <code style="background: var(--panel); padding: 2px 6px; border-radius: 3px;">${window.location.origin}/?api=twilio.webhook</code></li>
+              <li>Assign phone numbers (Caller IDs) to users in Users section</li>
+            </ol>
+          </div>
+          <button type="submit" class="btn" style="margin-top: 16px;">Save Credentials</button>
+          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+        </form>
+      `);
+    }
+    
+    async function saveTwilioSettings(e) {
+      e.preventDefault();
+      const form = e.target;
+      
+      const data = {
+        account_sid: form.account_sid.value.trim(),
+        auth_token: form.auth_token.value.trim(),
+        twiml_app_sid: form.twiml_app_sid.value.trim()
+      };
+      
+      try {
+        await api('twilio.settings.set', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+        alert('Twilio credentials saved successfully!');
+        closeModal();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
     }
     
     async function exportData() {
