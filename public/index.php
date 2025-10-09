@@ -1460,11 +1460,11 @@ function api_twilio_token() {
   require_auth();
   $pdo = db();
   
-  // TEMPORARY: Hardcoded credentials to bypass environment caching
-  $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
-  $api_key = 'SK50cb9f53acf0acc86f8261ccb97b9100';
-  $api_secret = 'pLKwYjdqpc5LhvtLHFxKPhqHmXVg7aF9';
-  $twiml_app_sid = 'AP813c0a67a91a08ee56e34e42194ad36b';
+  // Get Twilio credentials from environment variables
+  $account_sid = getenv('TWILIO_ACCOUNT_SID');
+  $api_key = getenv('TWILIO_API_KEY');
+  $api_secret = getenv('TWILIO_API_SECRET');
+  $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID');
   
   if (!$account_sid || !$api_key || !$api_secret || !$twiml_app_sid) {
     respond(['error' => 'Twilio not configured. Admin must set up API Key and API Secret in settings.'], 400);
