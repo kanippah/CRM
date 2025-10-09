@@ -1460,11 +1460,11 @@ function api_twilio_token() {
   require_auth();
   $pdo = db();
   
-  // Get Twilio credentials - prioritize environment variables, fallback to database settings
-  $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $api_key = getenv('TWILIO_API_KEY') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_key'")->fetchColumn();
-  $api_secret = getenv('TWILIO_API_SECRET') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_secret'")->fetchColumn();
-  $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
+  // TEMPORARY: Hardcoded credentials to bypass environment caching
+  $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
+  $api_key = 'SK58cb9f53acf0acc86f8261ccb97b9100';
+  $api_secret = 'pLKwYjdqpc5LhvtLHExKPhqHmXVg7aF9';
+  $twiml_app_sid = 'AP813c0a67a91a08ee56e34e42194ad36b';
   
   if (!$account_sid || !$api_key || !$api_secret || !$twiml_app_sid) {
     respond(['error' => 'Twilio not configured. Admin must set up API Key and API Secret in settings.'], 400);
@@ -1584,9 +1584,9 @@ function api_twilio_numbers() {
   require_admin();
   $pdo = db();
   
-  // Get Twilio credentials - prioritize environment variables, fallback to database settings
-  $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
+  // TEMPORARY: Hardcoded credentials to bypass environment caching
+  $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
+  $auth_token = '727e997f89fae5fcca1ce8c8a029af02';
   
   if (!$account_sid || !$auth_token) {
     respond(['error' => 'Twilio not configured'], 400);
