@@ -390,8 +390,6 @@ if (isset($_GET['api'])) {
       
       case 'twilio.token': api_twilio_token(); break;
       case 'twilio.webhook': api_twilio_webhook(); break;
-      case 'twilio.settings.get': api_twilio_settings_get(); break;
-      case 'twilio.settings.set': api_twilio_settings_set(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
@@ -1581,62 +1579,6 @@ function api_twilio_webhook() {
   exit;
 }
 
-function api_twilio_settings_get() {
-  require_admin();
-  $pdo = db();
-  
-  // Get Twilio credentials - prioritize environment variables, fallback to database settings
-  $account_sid = getenv('TWILIO_ACCOUNT_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_account_sid'")->fetchColumn();
-  $auth_token = getenv('TWILIO_AUTH_TOKEN') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_auth_token'")->fetchColumn();
-  $api_key = getenv('TWILIO_API_KEY') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_key'")->fetchColumn();
-  $api_secret = getenv('TWILIO_API_SECRET') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_api_secret'")->fetchColumn();
-  $twiml_app_sid = getenv('TWILIO_TWIML_APP_SID') ?: $pdo->query("SELECT value FROM settings WHERE key='twilio_twiml_app_sid'")->fetchColumn();
-  
-  // Show if using env vars
-  $using_env = getenv('TWILIO_ACCOUNT_SID') ? true : false;
-  
-  respond([
-    'account_sid' => $account_sid ?: '',
-    'auth_token' => $auth_token ? '••••••••' : '', // Mask the token (still needed for REST API)
-    'api_key' => $api_key ?: '',
-    'api_secret' => $api_secret ? '••••••••' : '', // Mask the secret
-    'twiml_app_sid' => $twiml_app_sid ?: '',
-    'using_env_vars' => $using_env
-  ]);
-}
-
-function api_twilio_settings_set() {
-  require_admin();
-  $pdo = db();
-  $b = body_json();
-  
-  if (isset($b['account_sid'])) {
-    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_account_sid', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
-      ->execute([':v' => $b['account_sid']]);
-  }
-  
-  if (isset($b['auth_token']) && $b['auth_token'] !== '••••••••') {
-    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_auth_token', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
-      ->execute([':v' => $b['auth_token']]);
-  }
-  
-  if (isset($b['api_key'])) {
-    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_api_key', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
-      ->execute([':v' => $b['api_key']]);
-  }
-  
-  if (isset($b['api_secret']) && $b['api_secret'] !== '••••••••') {
-    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_api_secret', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
-      ->execute([':v' => $b['api_secret']]);
-  }
-  
-  if (isset($b['twiml_app_sid'])) {
-    $pdo->prepare("INSERT INTO settings(key,value) VALUES ('twilio_twiml_app_sid', :v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")
-      ->execute([':v' => $b['twiml_app_sid']]);
-  }
-  
-  respond(['ok' => true]);
-}
 
 function api_twilio_numbers() {
   require_admin();
@@ -4462,13 +4404,6 @@ if (isset($_GET['background'])) {
         </div>
         ${isAdmin ? `
         <div class="card" style="margin-top: 16px;">
-          <h3>📞 Twilio Calling Settings</h3>
-          <button class="btn" onclick="openTwilioSettings()">Configure Twilio Credentials</button>
-          <p style="font-size: 12px; color: var(--muted); margin-top: 8px;">
-            Configure Twilio for browser-based calling. Users need to have Caller IDs assigned in the Users section.
-          </p>
-        </div>
-        <div class="card" style="margin-top: 16px;">
           <h3>Manage Industries</h3>
           <button class="btn" onclick="openIndustriesManagement()">Manage Industries</button>
         </div>
@@ -4493,88 +4428,6 @@ if (isset($_GET['background'])) {
         body: JSON.stringify({ key: 'defaultCountry', value })
       });
       alert('Default country saved');
-    }
-    
-    async function openTwilioSettings() {
-      const settings = await api('twilio.settings.get');
-      
-      const envVarNotice = settings.using_env_vars ? `
-        <div style="background: #0066CC20; border: 1px solid #0066CC; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-          <strong>✅ Using Replit Environment Variables</strong>
-          <p style="margin: 8px 0 0 0; font-size: 13px; color: var(--muted);">
-            Twilio credentials are loaded from Replit secrets (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN).
-            ${!settings.twiml_app_sid ? 'You still need to set the TwiML App SID below.' : 'TwiML App SID can be set below or via TWILIO_TWIML_APP_SID secret.'}
-          </p>
-        </div>
-      ` : '';
-      
-      showModal(`
-        <h3>📞 Twilio Calling Configuration</h3>
-        ${envVarNotice}
-        <form onsubmit="saveTwilioSettings(event)">
-          <div class="form-group">
-            <label>Account SID *</label>
-            <input type="text" name="account_sid" value="${settings.account_sid || ''}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
-            <small style="color: var(--muted);">Find this in your Twilio Console</small>
-          </div>
-          <div class="form-group">
-            <label>Auth Token * <span style="color: var(--muted); font-weight: normal;">(for REST API)</span></label>
-            <input type="text" name="auth_token" value="${settings.auth_token || ''}" placeholder="Your auth token" required>
-            <small style="color: var(--muted);">Find this in your Twilio Console</small>
-          </div>
-          <div class="form-group">
-            <label>API Key SID * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
-            <input type="text" name="api_key" value="${settings.api_key || ''}" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
-            <small style="color: var(--muted);">Create at console.twilio.com/project/api-keys</small>
-          </div>
-          <div class="form-group">
-            <label>API Secret * <span style="color: var(--muted); font-weight: normal;">(for Voice SDK)</span></label>
-            <input type="text" name="api_secret" value="${settings.api_secret || ''}" placeholder="Your API secret" required>
-            <small style="color: var(--muted);">Shown only once when creating API Key</small>
-          </div>
-          <div class="form-group">
-            <label>TwiML App SID *</label>
-            <input type="text" name="twiml_app_sid" value="${settings.twiml_app_sid || ''}" placeholder="APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
-            <small style="color: var(--muted);">Create a TwiML App in Twilio Console and paste the SID here</small>
-          </div>
-          <div style="background: var(--bg); padding: 12px; border-radius: 6px; margin-top: 16px;">
-            <h4 style="margin: 0 0 8px 0;">Setup Instructions:</h4>
-            <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted);">
-              <li>Create a Twilio account at twilio.com</li>
-              <li><strong>Create API Key:</strong> Go to console.twilio.com/project/api-keys → Create API Key → Copy SID & Secret</li>
-              <li>Create a TwiML Application in Console</li>
-              <li>Set webhook URL to: <code style="background: var(--panel); padding: 2px 6px; border-radius: 3px;">${window.location.origin}/?api=twilio.webhook</code></li>
-              <li>Assign phone numbers (Caller IDs) to users in Users section</li>
-            </ol>
-          </div>
-          <button type="submit" class="btn" style="margin-top: 16px;">Save Credentials</button>
-          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
-        </form>
-      `);
-    }
-    
-    async function saveTwilioSettings(e) {
-      e.preventDefault();
-      const form = e.target;
-      
-      const data = {
-        account_sid: form.account_sid.value.trim(),
-        auth_token: form.auth_token.value.trim(),
-        api_key: form.api_key.value.trim(),
-        api_secret: form.api_secret.value.trim(),
-        twiml_app_sid: form.twiml_app_sid.value.trim()
-      };
-      
-      try {
-        await api('twilio.settings.set', {
-          method: 'POST',
-          body: JSON.stringify(data)
-        });
-        alert('Twilio credentials saved successfully!');
-        closeModal();
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
     }
     
     async function exportData() {
