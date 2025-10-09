@@ -2370,17 +2370,16 @@ if (isset($_GET['background'])) {
     
     // Initialize Twilio Device
     async function initTwilioDevice() {
-      if (!currentUser || typeof Twilio === 'undefined') return;
+      if (!currentUser || typeof Twilio === 'undefined' || !Twilio.Device) return;
       
       try {
         const tokenData = await api('twilio.token');
         twilioDevice = new Twilio.Device(tokenData.token, {
           codecPreferences: ['opus', 'pcmu'],
-          fakeLocalDTMF: true,
-          enableRingingState: true
+          logLevel: 1
         });
         
-        twilioDevice.on('ready', () => {
+        twilioDevice.on('registered', () => {
           console.log('Twilio Device Ready');
         });
         
@@ -2390,20 +2389,7 @@ if (isset($_GET['background'])) {
           closeCallWidget();
         });
         
-        twilioDevice.on('connect', (conn) => {
-          console.log('Call connected');
-          currentCall = conn;
-          updateCallStatus('Connected');
-          startCallTimer();
-          document.getElementById('muteBtn').style.display = 'inline-block';
-        });
-        
-        twilioDevice.on('disconnect', () => {
-          console.log('Call ended');
-          stopCallTimer();
-          closeCallWidget();
-          currentCall = null;
-        });
+        twilioDevice.register();
         
       } catch (error) {
         console.log('Twilio not configured - calling features disabled');
@@ -2429,7 +2415,28 @@ if (isset($_GET['background'])) {
         
         // Make the call
         const params = { To: phoneNumber };
-        currentCall = twilioDevice.connect(params);
+        currentCall = await twilioDevice.connect({ params });
+        
+        // Setup call event listeners
+        currentCall.on('accept', () => {
+          console.log('Call connected');
+          updateCallStatus('Connected');
+          startCallTimer();
+          document.getElementById('muteBtn').style.display = 'inline-block';
+        });
+        
+        currentCall.on('disconnect', () => {
+          console.log('Call ended');
+          stopCallTimer();
+          closeCallWidget();
+          currentCall = null;
+        });
+        
+        currentCall.on('cancel', () => {
+          console.log('Call cancelled');
+          closeCallWidget();
+          currentCall = null;
+        });
         
       } catch (error) {
         console.error('Call failed:', error);
