@@ -1503,10 +1503,14 @@ function api_twilio_token() {
     ]
   ];
   
-  // Create JWT token (simple base64 encoding for now - in production use proper JWT library)
-  $header = base64_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
-  $payload = base64_encode(json_encode($token_data));
-  $signature = base64_encode(hash_hmac('sha256', "$header.$payload", $auth_token, true));
+  // Create JWT token with proper base64url encoding
+  function base64url_encode($data) {
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+  }
+  
+  $header = base64url_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+  $payload = base64url_encode(json_encode($token_data));
+  $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", $auth_token, true));
   $jwt = "$header.$payload.$signature";
   
   respond([
