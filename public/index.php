@@ -3392,18 +3392,54 @@ if (isset($_GET['background'])) {
       const user = data.items.find(u => u.id === userId);
       const currentCallerID = user?.caller_id || '';
       
-      showModal(`
-        <h3>Set Caller ID for ${user.full_name}</h3>
-        <form onsubmit="saveCallerID(event, ${userId})">
-          <div class="form-group">
-            <label>Caller ID (Phone Number) *</label>
-            <input type="text" name="caller_id" value="${currentCallerID}" placeholder="+12015551234" required>
-            <small style="color: var(--muted);">Format: +[country code][number] (e.g., +12015551234)</small>
-          </div>
-          <button type="submit" class="btn">Save</button>
-          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
-        </form>
-      `);
+      // Try to fetch Twilio numbers
+      let twilioNumbers = [];
+      try {
+        const numbersData = await api('twilio.numbers');
+        twilioNumbers = numbersData.numbers || [];
+      } catch (e) {
+        console.log('Twilio numbers not available:', e.message);
+      }
+      
+      if (twilioNumbers.length > 0) {
+        // Show dropdown with Twilio numbers
+        const options = twilioNumbers.map(num => 
+          `<option value="${num.phone_number}" ${currentCallerID === num.phone_number ? 'selected' : ''}>
+            ${num.phone_number} ${num.friendly_name ? '(' + num.friendly_name + ')' : ''}
+          </option>`
+        ).join('');
+        
+        showModal(`
+          <h3>Set Caller ID for ${user.full_name}</h3>
+          <form onsubmit="saveCallerID(event, ${userId})">
+            <div class="form-group">
+              <label>Caller ID (Phone Number) *</label>
+              <select name="caller_id" required>
+                <option value="">-- Select a phone number --</option>
+                ${options}
+              </select>
+              <small style="color: var(--muted);">Select from your Twilio phone numbers</small>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      } else {
+        // Fallback to text input if Twilio not configured
+        showModal(`
+          <h3>Set Caller ID for ${user.full_name}</h3>
+          <form onsubmit="saveCallerID(event, ${userId})">
+            <div class="form-group">
+              <label>Caller ID (Phone Number) *</label>
+              <input type="text" name="caller_id" value="${currentCallerID}" placeholder="+12015551234" required>
+              <small style="color: var(--muted);">Format: +[country code][number] (e.g., +12015551234)<br>
+              <strong>Note:</strong> Configure Twilio in Settings to select from available numbers</small>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      }
     }
     
     async function saveCallerID(e, userId) {
