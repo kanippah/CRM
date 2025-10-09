@@ -2,12 +2,6 @@
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', '0');
 
-// Configure session settings for proper persistence
-ini_set('session.cookie_httponly', '1');
-ini_set('session.cookie_samesite', 'Lax');
-ini_set('session.use_only_cookies', '1');
-ini_set('session.cookie_lifetime', '0'); // Session cookie (until browser closes)
-
 session_start();
 
 $DB_HOST = getenv('PGHOST') ?: '127.0.0.1';
@@ -290,17 +284,14 @@ function ensure_schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='industry') THEN
         ALTER TABLE contacts ADD COLUMN industry TEXT;
       END IF;
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='phone_number') THEN
-        ALTER TABLE users ADD COLUMN phone_number TEXT;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='caller_id') THEN
+        ALTER TABLE users ADD COLUMN caller_id TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='recording_url') THEN
+        ALTER TABLE calls ADD COLUMN recording_url TEXT;
       END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_call_sid') THEN
         ALTER TABLE calls ADD COLUMN twilio_call_sid TEXT;
-      END IF;
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_status') THEN
-        ALTER TABLE calls ADD COLUMN twilio_status TEXT;
-      END IF;
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='twilio_recording_url') THEN
-        ALTER TABLE calls ADD COLUMN twilio_recording_url TEXT;
       END IF;
     END $$;
     
@@ -397,10 +388,8 @@ if (isset($_GET['api'])) {
       case 'import': api_import(); break;
       case 'reset': api_reset(); break;
       
-      case 'twilio.call': api_twilio_call(); break;
-      case 'twilio.bridge': api_twilio_bridge(); break;
       case 'twilio.token': api_twilio_token(); break;
-      case 'twilio.status': api_twilio_status(); break;
+      case 'twilio.webhook': api_twilio_webhook(); break;
       case 'twilio.numbers': api_twilio_numbers(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
@@ -429,11 +418,8 @@ function api_login() {
   $password = $b['password'] ?? '';
   $remember_me = $b['remember_me'] ?? false;
   
-  error_log("Login attempt for email: $email");
-  
   // Validate email format
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    error_log("Login failed: Invalid email format");
     respond(['error' => 'Invalid email format'], 400);
   }
   
@@ -442,49 +428,35 @@ function api_login() {
   $stmt->execute([':e' => $email]);
   $user = $stmt->fetch();
   
-  if (!$user) {
-    error_log("Login failed: User not found for email $email");
+  if ($user && password_verify($password, $user['password'])) {
+    // Check if user is active
+    if (isset($user['status']) && $user['status'] === 'inactive') {
+      respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
+    }
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['username'] = $user['username'];
+    $_SESSION['email'] = $user['email'];
+    $_SESSION['full_name'] = $user['full_name'];
+    $_SESSION['role'] = $user['role'];
+    
+    // Handle remember me
+    if ($remember_me) {
+      $token = bin2hex(random_bytes(32));
+      $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
+        ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
+      setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
+    }
+    
+    respond(['ok' => true, 'user' => [
+      'id' => $user['id'],
+      'username' => $user['username'],
+      'email' => $user['email'],
+      'full_name' => $user['full_name'],
+      'role' => $user['role']
+    ]]);
+  } else {
     respond(['error' => 'Invalid email or password'], 401);
   }
-  
-  error_log("User found: ID={$user['id']}, Role={$user['role']}, Status={$user['status']}");
-  
-  if (!password_verify($password, $user['password'])) {
-    error_log("Login failed: Password verification failed for user {$user['id']}");
-    respond(['error' => 'Invalid email or password'], 401);
-  }
-  
-  error_log("Password verified successfully for user {$user['id']}");
-  
-  // Check if user is active
-  if (isset($user['status']) && $user['status'] === 'inactive') {
-    error_log("Login failed: User {$user['id']} is inactive");
-    respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
-  }
-  
-  $_SESSION['user_id'] = $user['id'];
-  $_SESSION['username'] = $user['username'];
-  $_SESSION['email'] = $user['email'];
-  $_SESSION['full_name'] = $user['full_name'];
-  $_SESSION['role'] = $user['role'];
-  
-  error_log("Session created for user {$user['id']}, role: {$user['role']}");
-  
-  // Handle remember me
-  if ($remember_me) {
-    $token = bin2hex(random_bytes(32));
-    $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
-      ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
-    setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
-  }
-  
-  respond(['ok' => true, 'user' => [
-    'id' => $user['id'],
-    'username' => $user['username'],
-    'email' => $user['email'],
-    'full_name' => $user['full_name'],
-    'role' => $user['role']
-  ]]);
 }
 
 function api_logout() {
@@ -707,7 +679,7 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, status, phone_number, personal_phone, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, caller_id, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
   $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
@@ -724,44 +696,51 @@ function api_users_save() {
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
   $password = $b['password'] ?? '';
-  $phone_number = trim($b['phone_number'] ?? '');
-  $personal_phone = trim($b['personal_phone'] ?? '');
+  $caller_id = isset($b['caller_id']) ? trim($b['caller_id']) : null;
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
   
-  // Validate email format
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+  // Validate email format if email is provided
+  if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respond(['error' => 'Invalid email format'], 400);
   }
   
   // Check if email already exists (excluding current user if editing)
-  if ($id) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e) AND id != :id");
-    $stmt->execute([':e' => $email, ':id' => $id]);
-  } else {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
-    $stmt->execute([':e' => $email]);
-  }
-  if ($stmt->fetch()) {
-    respond(['error' => 'Email already exists'], 400);
+  if ($email) {
+    if ($id) {
+      $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e) AND id != :id");
+      $stmt->execute([':e' => $email, ':id' => $id]);
+    } else {
+      $stmt = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(:e)");
+      $stmt->execute([':e' => $email]);
+    }
+    if ($stmt->fetch()) {
+      respond(['error' => 'Email already exists'], 400);
+    }
   }
   
   if ($id) {
-    if ($password) {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, phone_number=:ph, personal_phone=:pp WHERE id=:id RETURNING id, username, email, full_name, role, phone_number, personal_phone");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':ph' => $phone_number, ':pp' => $personal_phone, ':id' => $id]);
+    // Handle caller_id-only update (check if only id and caller_id are provided)
+    if (isset($b['caller_id']) && !isset($b['email']) && !isset($b['full_name']) && !isset($b['role']) && !isset($b['password'])) {
+      $stmt = $pdo->prepare("UPDATE users SET caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
+    } else if ($password) {
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, password=:p, caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':p' => password_hash($password, PASSWORD_DEFAULT), ':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
     } else {
-      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, phone_number=:ph, personal_phone=:pp WHERE id=:id RETURNING id, username, email, full_name, role, phone_number, personal_phone");
-      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':pp' => $personal_phone, ':id' => $id]);
+      $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, caller_id=:cid WHERE id=:id RETURNING id, username, email, full_name, role, caller_id");
+      $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':cid' => $caller_id, ':id' => $id]);
+      $user = $stmt->fetch();
     }
-    $user = $stmt->fetch();
   } else {
     if (!$password) {
       respond(['error' => 'Password is required for new users'], 400);
     }
-    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, phone_number, personal_phone) VALUES (:e, :u, :p, :n, :r, :ph, :pp) RETURNING id, username, email, full_name, role, phone_number, personal_phone");
-    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':ph' => $phone_number, ':pp' => $personal_phone]);
+    $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role, caller_id) VALUES (:e, :u, :p, :n, :r, :cid) RETURNING id, username, email, full_name, role, caller_id");
+    $stmt->execute([':e' => $email, ':u' => $username, ':p' => password_hash($password, PASSWORD_DEFAULT), ':n' => $full_name, ':r' => $role, ':cid' => $caller_id]);
     $user = $stmt->fetch();
   }
   
@@ -1477,185 +1456,166 @@ function api_reset() {
   respond(['ok' => true]);
 }
 
-function api_twilio_call() {
+function api_twilio_token() {
   require_auth();
-  $b = body_json();
-  $p = db();
+  $pdo = db();
   
-  $to_number = $b['to_number'] ?? '';
-  $contact_id = (int)($b['contact_id'] ?? 0);
+  // TEMPORARY: Hardcoded credentials to bypass environment caching
+  $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
+  $api_key = 'SK50cb9f53acf0acc86f8261ccb97b9100';
+  $api_secret = 'pLKwYjdqpc5LhvtLHFxKPhqHmXVg7aF9';
+  $twiml_app_sid = 'AP813c0a67a91a08ee56e34e42194ad36b';
+  
+  if (!$account_sid || !$api_key || !$api_secret || !$twiml_app_sid) {
+    respond(['error' => 'Twilio not configured. Admin must set up API Key and API Secret in settings.'], 400);
+  }
+  
+  // Get user's caller ID
   $user_id = $_SESSION['user_id'];
+  $user = $pdo->query("SELECT caller_id FROM users WHERE id={$user_id}")->fetch();
+  $caller_id = $user['caller_id'] ?? '';
   
-  $stmt = $p->prepare("SELECT phone_number, personal_phone FROM users WHERE id=:id");
-  $stmt->execute([':id' => $user_id]);
-  $user = $stmt->fetch();
-  
-  if (!$user || !$user['phone_number']) {
-    respond(['error' => 'No DID assigned to your account. Please contact admin.'], 400);
+  if (!$caller_id) {
+    respond(['error' => 'No caller ID assigned. Please contact administrator.'], 400);
   }
   
-  if (!$user['personal_phone']) {
-    respond(['error' => 'No personal phone number configured. Please update your profile in Users settings.'], 400);
-  }
-  
-  $user_did = $user['phone_number']; // DID for caller ID
-  $user_phone = $user['personal_phone']; // Your actual phone
-  $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
-  $callback_url = $base_url . '/?api=twilio.status';
-  $twiml_url = $base_url . '/?api=twilio.bridge&contact=' . urlencode($to_number) . '&from=' . urlencode($user_did);
-  
-  $twilio_url = 'https://api.twilio.com/2010-04-01/Accounts/' . getenv('TWILIO_ACCOUNT_SID') . '/Calls.json';
-  
-  // Step 1: Call the user's personal phone first, when they answer, bridge to contact
-  $data = [
-    'From' => $user_did,
-    'To' => $user_phone,
-    'Url' => $twiml_url,
-    'StatusCallback' => $callback_url,
-    'StatusCallbackEvent' => ['initiated', 'ringing', 'answered', 'completed'],
-    'Record' => 'true'
+  // Generate Twilio access token (must be signed with API Secret, not Auth Token!)
+  $identity = $_SESSION['username'];
+  $token_data = [
+    'jti' => $api_key . '-' . time(),
+    'iss' => $api_key,  // API Key SID (not Account SID)
+    'sub' => $account_sid,
+    'nbf' => time(),
+    'exp' => time() + 3600, // 1 hour expiry
+    'grants' => [
+      'identity' => $identity,
+      'voice' => [
+        'incoming' => ['allow' => true],
+        'outgoing' => [
+          'application_sid' => $twiml_app_sid,
+          'params' => [
+            'From' => $caller_id,
+            'userId' => $user_id
+          ]
+        ]
+      ]
+    ]
   ];
   
-  $auth = base64_encode(getenv('TWILIO_ACCOUNT_SID') . ':' . getenv('TWILIO_AUTH_TOKEN'));
-  
-  $ch = curl_init($twilio_url);
-  curl_setopt($ch, CURLOPT_POST, true);
-  curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Authorization: Basic ' . $auth,
-    'Content-Type: application/x-www-form-urlencoded'
-  ]);
-  
-  $response = curl_exec($ch);
-  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  curl_close($ch);
-  
-  if ($http_code != 201 && $http_code != 200) {
-    error_log("Twilio API error: " . $response);
-    respond(['error' => 'Failed to initiate call', 'detail' => $response], 500);
+  // Create JWT token with proper base64url encoding
+  function base64url_encode($data) {
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
   }
   
-  $twilio_response = json_decode($response, true);
-  $call_sid = $twilio_response['sid'] ?? '';
+  $header = base64url_encode(json_encode(['typ' => 'JWT', 'alg' => 'HS256']));
+  $payload = base64url_encode(json_encode($token_data));
+  $signature = base64url_encode(hash_hmac('sha256', "$header.$payload", $api_secret, true));
+  $jwt = "$header.$payload.$signature";
   
-  $stmt = $p->prepare("INSERT INTO calls (contact_id, when_at, outcome, notes, assigned_to, twilio_call_sid, twilio_status, created_at, updated_at) 
-                       VALUES (:cid, :w, :o, :n, :a, :sid, :status, :c, :u) RETURNING *");
-  $now = date('c');
-  $stmt->execute([
-    ':cid' => $contact_id,
-    ':w' => $now,
-    ':o' => 'initiated',
-    ':n' => 'Outbound call to ' . $to_number,
-    ':a' => $user_id,
-    ':sid' => $call_sid,
-    ':status' => 'initiated',
-    ':c' => $now,
-    ':u' => $now
+  respond([
+    'token' => $jwt,
+    'identity' => $identity,
+    'caller_id' => $caller_id
   ]);
-  
-  $call = $stmt->fetch();
-  
-  respond(['ok' => true, 'call' => $call, 'twilio' => $twilio_response]);
 }
 
-function api_twilio_bridge() {
-  // TwiML to bridge user to contact when they answer their DID
-  $contact_number = $_GET['contact'] ?? '';
-  $from_number = $_GET['from'] ?? '';
+function api_twilio_webhook() {
+  // Twilio webhook to receive call status updates
+  $call_sid = $_POST['CallSid'] ?? '';
+  $call_status = $_POST['CallStatus'] ?? '';
+  $call_duration = (int)($_POST['CallDuration'] ?? 0);
+  $recording_url = $_POST['RecordingUrl'] ?? '';
+  $to_number = $_POST['To'] ?? '';
+  $user_id = (int)($_POST['userId'] ?? 0);
   
-  header('Content-Type: application/xml');
-  echo '<?xml version="1.0" encoding="UTF-8"?>';
-  echo '<Response>';
-  echo '  <Say voice="alice">Connecting you to the contact now.</Say>';
-  echo '  <Dial callerId="' . htmlspecialchars($from_number) . '" record="record-from-answer">';
-  echo '    <Number>' . htmlspecialchars($contact_number) . '</Number>';
-  echo '  </Dial>';
-  echo '</Response>';
+  if (!$call_sid) {
+    respond(['error' => 'Missing CallSid'], 400);
+  }
+  
+  $pdo = db();
+  
+  // Find contact by phone number
+  $contact = null;
+  if ($to_number) {
+    $normalized = preg_replace('/\D+/', '', $to_number);
+    $stmt = $pdo->prepare("SELECT id FROM contacts WHERE regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,''), '\\D', '', 'g') = :phone LIMIT 1");
+    $stmt->execute([':phone' => $normalized]);
+    $contact = $stmt->fetch();
+  }
+  
+  // Update or create call log
+  if ($call_status === 'completed') {
+    $contact_id = $contact ? $contact['id'] : null;
+    $duration_min = ceil($call_duration / 60);
+    $when_at = date('c');
+    
+    // Check if call already exists
+    $existing = $pdo->prepare("SELECT id FROM calls WHERE twilio_call_sid = :sid");
+    $existing->execute([':sid' => $call_sid]);
+    $call = $existing->fetch();
+    
+    if ($call) {
+      // Update existing call
+      $pdo->prepare("UPDATE calls SET duration_min = :dur, recording_url = :rec, outcome = 'Completed' WHERE id = :id")
+        ->execute([':dur' => $duration_min, ':rec' => $recording_url, ':id' => $call['id']]);
+    } else {
+      // Create new call log
+      $pdo->prepare("INSERT INTO calls (contact_id, when_at, outcome, duration_min, recording_url, twilio_call_sid, assigned_to, notes) VALUES (:cid, :when, 'Completed', :dur, :rec, :sid, :uid, :notes)")
+        ->execute([
+          ':cid' => $contact_id,
+          ':when' => $when_at,
+          ':dur' => $duration_min,
+          ':rec' => $recording_url,
+          ':sid' => $call_sid,
+          ':uid' => $user_id,
+          ':notes' => 'Called from CRM to ' . $to_number
+        ]);
+    }
+  }
+  
+  // Return TwiML response
+  header('Content-Type: text/xml');
+  echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
   exit;
 }
 
-function api_twilio_status() {
-  $call_sid = $_POST['CallSid'] ?? '';
-  $call_status = $_POST['CallStatus'] ?? '';
-  $call_duration = $_POST['CallDuration'] ?? 0;
-  $recording_url = $_POST['RecordingUrl'] ?? '';
-  
-  if (!$call_sid) {
-    respond(['ok' => false]);
-  }
-  
-  $p = db();
-  $stmt = $p->prepare("SELECT id FROM calls WHERE twilio_call_sid=:sid");
-  $stmt->execute([':sid' => $call_sid]);
-  $call = $stmt->fetch();
-  
-  if (!$call) {
-    error_log("Twilio callback: Call not found for SID: $call_sid");
-    respond(['ok' => false]);
-  }
-  
-  $outcome = $call_status;
-  if ($call_status === 'completed') {
-    $outcome = 'answered';
-  } elseif (in_array($call_status, ['busy', 'no-answer', 'failed', 'canceled'])) {
-    $outcome = 'no-answer';
-  }
-  
-  $duration_min = $call_duration > 0 ? ceil($call_duration / 60) : 0;
-  
-  $update_stmt = $p->prepare("UPDATE calls SET twilio_status=:status, outcome=:outcome, duration_min=:dur, 
-                               twilio_recording_url=:rec, updated_at=:u WHERE id=:id");
-  $update_stmt->execute([
-    ':status' => $call_status,
-    ':outcome' => $outcome,
-    ':dur' => $duration_min,
-    ':rec' => $recording_url,
-    ':u' => date('c'),
-    ':id' => $call['id']
-  ]);
-  
-  error_log("Twilio callback: Updated call {$call['id']} with status $call_status, duration $call_duration");
-  
-  respond(['ok' => true]);
-}
 
 function api_twilio_numbers() {
   require_admin();
+  $pdo = db();
   
-  $account_sid = getenv('TWILIO_ACCOUNT_SID');
-  $auth_token = getenv('TWILIO_AUTH_TOKEN');
+  // TEMPORARY: Hardcoded credentials to bypass environment caching
+  $account_sid = 'ACf2e2e9368e8ba80fc5be3a094998fcc4';
+  $auth_token = '727e997f89fae5fcca1ce8c8a029af02';
   
   if (!$account_sid || !$auth_token) {
-    respond(['error' => 'Twilio credentials not configured'], 500);
+    respond(['error' => 'Twilio not configured'], 400);
   }
   
+  // Fetch phone numbers from Twilio API
   $url = "https://api.twilio.com/2010-04-01/Accounts/{$account_sid}/IncomingPhoneNumbers.json";
-  $auth = base64_encode($account_sid . ':' . $auth_token);
   
-  $ch = curl_init($url);
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $url);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Authorization: Basic ' . $auth
-  ]);
+  curl_setopt($ch, CURLOPT_USERPWD, "$account_sid:$auth_token");
+  curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
   
   $response = curl_exec($ch);
   $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
   
-  if ($http_code != 200) {
-    error_log("Twilio API error fetching numbers: " . $response);
-    respond(['error' => 'Failed to fetch Twilio numbers', 'detail' => $response], 500);
+  if ($http_code !== 200) {
+    respond(['error' => 'Failed to fetch numbers from Twilio'], 400);
   }
   
   $data = json_decode($response, true);
   $numbers = [];
   
-  foreach (($data['incoming_phone_numbers'] ?? []) as $num) {
+  foreach ($data['incoming_phone_numbers'] ?? [] as $num) {
     $numbers[] = [
-      'sid' => $num['sid'],
       'phone_number' => $num['phone_number'],
-      'friendly_name' => $num['friendly_name'] ?? $num['phone_number']
+      'friendly_name' => $num['friendly_name']
     ];
   }
   
@@ -1674,6 +1634,12 @@ if (isset($_GET['favicon'])) {
   exit;
 }
 
+if (isset($_GET['twilio-sdk'])) {
+  header('Content-Type: application/javascript');
+  readfile(__DIR__ . '/twilio.min.js');
+  exit;
+}
+
 if (isset($_GET['background'])) {
   header('Content-Type: image/jpeg');
   readfile('background.jpg');
@@ -1687,6 +1653,7 @@ if (isset($_GET['background'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Koadi Technology CRM</title>
   <link rel="icon" href="?favicon" type="image/png">
+  <script src="?twilio-sdk"></script>
   <style>
     :root {
       --kt-orange: #FF8C42;
@@ -2191,12 +2158,162 @@ if (isset($_GET['background'])) {
       .app { flex-direction: column; }
       .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
     }
+    
+    /* Twilio Call Widget */
+    .call-widget {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      display: none;
+      padding: 16px;
+    }
+    
+    .call-widget.active {
+      display: block;
+    }
+    
+    .call-widget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .call-widget-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .call-widget-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+    }
+    
+    .call-widget-body {
+      text-align: center;
+    }
+    
+    .call-number {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    
+    .call-contact-name {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    
+    .call-status {
+      font-size: 14px;
+      color: var(--brand);
+      margin-bottom: 8px;
+    }
+    
+    .call-timer {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+    
+    .call-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    
+    .call-btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .call-btn-primary {
+      background: var(--brand);
+      color: white;
+    }
+    
+    .call-btn-primary:hover {
+      background: var(--brand-hover);
+    }
+    
+    .call-btn-secondary {
+      background: var(--muted);
+      color: white;
+    }
+    
+    .call-btn-secondary:hover {
+      opacity: 0.8;
+    }
+    
+    .call-btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+    
+    .call-btn-danger:hover {
+      background: #c82333;
+    }
+    
+    .phone-link {
+      color: var(--brand);
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .phone-link:hover {
+      text-decoration: underline;
+    }
+    
+    .phone-link::before {
+      content: "📞";
+      font-size: 14px;
+    }
   </style>
 </head>
 <body data-theme="dark">
   <div id="app"></div>
   
-  <script src="https://sdk.twilio.com/js/client/releases/1.14.0/twilio.min.js"></script>
+  <!-- Twilio Call Widget -->
+  <div id="callWidget" class="call-widget">
+    <div class="call-widget-header">
+      <div class="call-widget-title">Call</div>
+      <button class="call-widget-close" onclick="closeCallWidget()">×</button>
+    </div>
+    <div class="call-widget-body">
+      <div class="call-contact-name" id="callContactName"></div>
+      <div class="call-number" id="callNumber"></div>
+      <div class="call-status" id="callStatus">Connecting...</div>
+      <div class="call-timer" id="callTimer">00:00</div>
+      <div class="call-controls">
+        <button class="call-btn call-btn-secondary" id="muteBtn" onclick="toggleMute()" style="display:none;">Mute</button>
+        <button class="call-btn call-btn-danger" onclick="hangupCall()">Hang Up</button>
+      </div>
+    </div>
+  </div>
+  
   <script>
     let currentUser = null;
     let currentView = 'leads';
@@ -2206,8 +2323,184 @@ if (isset($_GET['background'])) {
     let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
+    
+    // Twilio calling variables
     let twilioDevice = null;
-    let activeCall = null;
+    let currentCall = null;
+    let callTimer = null;
+    let callStartTime = null;
+    let isMuted = false;
+    
+    // Initialize Twilio Device
+    async function initTwilioDevice() {
+      const twilioLoaded = typeof Twilio !== 'undefined';
+      console.log('Init Twilio - User:', currentUser?.email, 'SDK loaded:', twilioLoaded);
+      
+      if (!currentUser) {
+        console.log('No user logged in');
+        return;
+      }
+      
+      if (!twilioLoaded || !Twilio.Device) {
+        console.log('Twilio SDK not available');
+        return;
+      }
+      
+      try {
+        // Request microphone permission first
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log('Microphone permission granted');
+        } catch (err) {
+          console.log('Microphone permission denied or unavailable:', err);
+          return;
+        }
+        
+        const tokenData = await api('twilio.token');
+        
+        if (!tokenData || !tokenData.token) {
+          console.log('No Twilio token received');
+          return;
+        }
+        
+        twilioDevice = new Twilio.Device(tokenData.token, {
+          codecPreferences: ['opus', 'pcmu'],
+          logLevel: 1
+        });
+        
+        twilioDevice.on('registered', () => {
+          console.log('Twilio Device Ready');
+        });
+        
+        twilioDevice.on('error', (error) => {
+          console.error('Twilio Device Error:', error);
+        });
+        
+        twilioDevice.register();
+        
+      } catch (error) {
+        console.log('Twilio not configured - calling features disabled:', error);
+        twilioDevice = null;
+      }
+    }
+    
+    // Make a call
+    async function makeCall(phoneNumber, contactName = '') {
+      if (!twilioDevice) {
+        alert('Phone system not initialized. Please contact administrator.');
+        return;
+      }
+      
+      try {
+        // Show call widget
+        document.getElementById('callWidget').classList.add('active');
+        document.getElementById('callContactName').textContent = contactName;
+        document.getElementById('callNumber').textContent = phoneNumber;
+        document.getElementById('callStatus').textContent = 'Calling...';
+        document.getElementById('callTimer').textContent = '00:00';
+        document.getElementById('muteBtn').style.display = 'none';
+        
+        // Make the call using SDK v2.x API
+        const params = { To: phoneNumber };
+        currentCall = await twilioDevice.connect({ params });
+        
+        // Setup call event listeners
+        currentCall.on('accept', () => {
+          console.log('Call connected');
+          updateCallStatus('Connected');
+          startCallTimer();
+          document.getElementById('muteBtn').style.display = 'inline-block';
+        });
+        
+        currentCall.on('disconnect', () => {
+          console.log('Call ended');
+          stopCallTimer();
+          closeCallWidget();
+          currentCall = null;
+        });
+        
+        currentCall.on('cancel', () => {
+          console.log('Call cancelled');
+          closeCallWidget();
+          currentCall = null;
+        });
+        
+      } catch (error) {
+        console.error('Call failed:', error);
+        const errorMsg = error?.message || 'Twilio credentials invalid. Please contact administrator to verify Account SID, Auth Token, and TwiML App SID.';
+        alert('Failed to make call: ' + errorMsg);
+        closeCallWidget();
+      }
+    }
+    
+    // Hangup call
+    function hangupCall() {
+      if (currentCall) {
+        currentCall.disconnect();
+      }
+      closeCallWidget();
+    }
+    
+    // Toggle mute
+    function toggleMute() {
+      if (!currentCall) return;
+      
+      isMuted = !isMuted;
+      currentCall.mute(isMuted);
+      
+      const muteBtn = document.getElementById('muteBtn');
+      if (isMuted) {
+        muteBtn.textContent = 'Unmute';
+        muteBtn.classList.remove('call-btn-secondary');
+        muteBtn.classList.add('call-btn-primary');
+      } else {
+        muteBtn.textContent = 'Mute';
+        muteBtn.classList.remove('call-btn-primary');
+        muteBtn.classList.add('call-btn-secondary');
+      }
+    }
+    
+    // Close call widget
+    function closeCallWidget() {
+      document.getElementById('callWidget').classList.remove('active');
+      stopCallTimer();
+      isMuted = false;
+      const muteBtn = document.getElementById('muteBtn');
+      muteBtn.textContent = 'Mute';
+      muteBtn.classList.remove('call-btn-primary');
+      muteBtn.classList.add('call-btn-secondary');
+    }
+    
+    // Update call status
+    function updateCallStatus(status) {
+      document.getElementById('callStatus').textContent = status;
+    }
+    
+    // Start call timer
+    function startCallTimer() {
+      callStartTime = Date.now();
+      callTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        document.getElementById('callTimer').textContent = `${minutes}:${seconds}`;
+      }, 1000);
+    }
+    
+    // Stop call timer
+    function stopCallTimer() {
+      if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+      }
+    }
+    
+    // Helper function to format phone for display
+    function makePhoneClickable(phoneCountry, phoneNumber, contactName = '') {
+      if (!phoneNumber) return '';
+      const fullNumber = (phoneCountry || '') + phoneNumber;
+      return `<a href="#" class="phone-link" onclick="event.preventDefault(); makeCall('${fullNumber}', '${contactName.replace(/'/g, "\\'")}')">${fullNumber}</a>`;
+    }
     
     async function api(endpoint, options = {}) {
       const res = await fetch(`?api=${endpoint}`, {
@@ -2502,6 +2795,9 @@ if (isset($_GET['background'])) {
       
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
       switchView(savedView);
+      
+      // Initialize Twilio device for calling
+      initTwilioDevice();
     }
     
     function switchView(view) {
@@ -2515,13 +2811,13 @@ if (isset($_GET['background'])) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + view).classList.add('active');
       
-      if (view === 'dashboard') renderDashboard().catch(e => console.error('Dashboard render error:', e));
-      if (view === 'contacts') renderContacts().catch(e => console.error('Contacts render error:', e));
-      if (view === 'calls') renderCalls().catch(e => console.error('Calls render error:', e));
-      if (view === 'projects') renderProjects().catch(e => console.error('Projects render error:', e));
-      if (view === 'leads') renderLeads().catch(e => console.error('Leads render error:', e));
-      if (view === 'users') renderUsers().catch(e => console.error('Users render error:', e));
-      if (view === 'settings') renderSettings().catch(e => console.error('Settings render error:', e));
+      if (view === 'dashboard') renderDashboard();
+      if (view === 'contacts') renderContacts();
+      if (view === 'calls') renderCalls();
+      if (view === 'projects') renderProjects();
+      if (view === 'leads') renderLeads();
+      if (view === 'users') renderUsers();
+      if (view === 'settings') renderSettings();
     }
     
     async function renderLeads() {
@@ -2634,9 +2930,7 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
-        const phoneDisplay = lead.phone && !isHidden
-          ? `${lead.phone} <button class="btn" style="padding: 2px 8px; margin-left: 4px;" onclick="initiateCallFromLead(${lead.id}, '${lead.phone}')">📞 Call</button>`
-          : (isHidden ? '***' : '-');
+        const phoneDisplay = isHidden ? '***' : (lead.phone ? makePhoneClickable('', lead.phone, lead.name) : '-');
         
         return `
           <tr>
@@ -3013,7 +3307,7 @@ if (isset($_GET['background'])) {
                 <th>Email</th>
                 <th>Full Name</th>
                 <th>Role</th>
-                <th>Phone Number (DID)</th>
+                <th>Caller ID</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -3054,13 +3348,13 @@ if (isset($_GET['background'])) {
           const toggleBtn = item.id !== currentUser.id 
             ? `<button class="btn ${item.status === 'active' ? 'warning' : 'success'}" onclick="toggleUserStatus(${item.id})">${item.status === 'active' ? 'Deactivate' : 'Activate'}</button>` 
             : '';
-          const phoneNumber = item.phone_number || '-';
+          const callerIdDisplay = item.caller_id || `<button class="btn" onclick="editCallerID(${item.id})">Set Caller ID</button>`;
           return `
             <tr>
               <td><strong>${item.email || 'N/A'}</strong></td>
               <td>${item.full_name}</td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
-              <td>${phoneNumber}</td>
+              <td>${callerIdDisplay}</td>
               <td>${statusBadge}</td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -3097,30 +3391,89 @@ if (isset($_GET['background'])) {
       }
     }
     
-    async function openUserForm(id = null) {
-      if (id) {
-        const data = await api('users.list');
-        const user = data.items.find(u => u.id === id);
-        await showUserForm(user);
-      } else {
-        await showUserForm(null);
-      }
-    }
-    
-    async function showUserForm(user) {
+    async function editCallerID(userId) {
+      const data = await api('users.list');
+      const user = data.items.find(u => u.id === userId);
+      const currentCallerID = user?.caller_id || '';
+      
+      // Try to fetch Twilio numbers
       let twilioNumbers = [];
       try {
         const numbersData = await api('twilio.numbers');
         twilioNumbers = numbersData.numbers || [];
       } catch (e) {
-        console.error('Failed to fetch Twilio numbers:', e);
+        console.log('Twilio numbers not available:', e.message);
       }
       
-      const numberOptions = twilioNumbers.length > 0
-        ? `<option value="">Select a Twilio Number</option>` + 
-          twilioNumbers.map(n => `<option value="${n.phone_number}" ${user?.phone_number === n.phone_number ? 'selected' : ''}>${n.friendly_name} (${n.phone_number})</option>`).join('')
-        : `<option value="">No Twilio numbers available</option>`;
+      if (twilioNumbers.length > 0) {
+        // Show dropdown with Twilio numbers
+        const options = twilioNumbers.map(num => 
+          `<option value="${num.phone_number}" ${currentCallerID === num.phone_number ? 'selected' : ''}>
+            ${num.phone_number} ${num.friendly_name ? '(' + num.friendly_name + ')' : ''}
+          </option>`
+        ).join('');
+        
+        showModal(`
+          <h3>Set Caller ID for ${user.full_name}</h3>
+          <form onsubmit="saveCallerID(event, ${userId})">
+            <div class="form-group">
+              <label>Caller ID (Phone Number) *</label>
+              <select name="caller_id" required>
+                <option value="">-- Select a phone number --</option>
+                ${options}
+              </select>
+              <small style="color: var(--muted);">Select from your Twilio phone numbers</small>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      } else {
+        // Fallback to text input if Twilio not configured
+        showModal(`
+          <h3>Set Caller ID for ${user.full_name}</h3>
+          <form onsubmit="saveCallerID(event, ${userId})">
+            <div class="form-group">
+              <label>Caller ID (Phone Number) *</label>
+              <input type="text" name="caller_id" value="${currentCallerID}" placeholder="+12015551234" required>
+              <small style="color: var(--muted);">Format: +[country code][number] (e.g., +12015551234)<br>
+              <strong>Note:</strong> Configure Twilio in Settings to select from available numbers</small>
+            </div>
+            <button type="submit" class="btn">Save</button>
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </form>
+        `);
+      }
+    }
+    
+    async function saveCallerID(e, userId) {
+      e.preventDefault();
+      const caller_id = e.target.caller_id.value.trim();
       
+      try {
+        await api('users.save', {
+          method: 'POST',
+          body: JSON.stringify({ id: userId, caller_id })
+        });
+        closeModal();
+        await loadUsers();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    function openUserForm(id = null) {
+      if (id) {
+        api('users.list').then(data => {
+          const user = data.items.find(u => u.id === id);
+          showUserForm(user);
+        });
+      } else {
+        showUserForm(null);
+      }
+    }
+    
+    function showUserForm(user) {
       showModal(`
         <h3>${user ? 'Edit User' : 'Add User'}</h3>
         <form onsubmit="saveUser(event, ${user ? user.id : 'null'})">
@@ -3142,18 +3495,6 @@ if (isset($_GET['background'])) {
               <option value="sales" ${user?.role === 'sales' ? 'selected' : ''}>Sales</option>
               <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Phone Number (DID for caller ID)</label>
-            <select name="phone_number" id="phoneNumberSelect">
-              ${numberOptions}
-            </select>
-            <small style="color: var(--muted); display: block; margin-top: 4px;">Twilio number shown to contacts as caller ID</small>
-          </div>
-          <div class="form-group">
-            <label>Your Phone Number *</label>
-            <input type="tel" name="personal_phone" value="${user?.personal_phone || ''}" placeholder="+18146511771" required>
-            <small style="color: var(--muted); display: block; margin-top: 4px;">Your actual phone number (Twilio will call this first, then bridge to contact)</small>
           </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
@@ -3178,9 +3519,7 @@ if (isset($_GET['background'])) {
         email: email,
         full_name: form.full_name.value,
         password: form.password.value,
-        role: form.role.value,
-        phone_number: form.phone_number.value.trim(),
-        personal_phone: form.personal_phone.value.trim()
+        role: form.role.value
       };
       
       try {
@@ -3351,11 +3690,6 @@ if (isset($_GET['background'])) {
       tbody.innerHTML = data.items.map(c => {
         const nameDisplay = `<a href="#" onclick="viewContact(${c.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${c.name || '(no name)'}</a>`;
         
-        const fullPhone = (c.phone_country||'') + ' ' + (c.phone_number||'');
-        const phoneDisplay = c.phone_number 
-          ? `${fullPhone} <button class="btn" style="padding: 2px 8px; margin-left: 4px;" onclick="initiateCall(${c.id}, '${fullPhone.trim()}')">📞 Call</button>`
-          : '-';
-        
         const actions = isAdmin 
           ? `<button class="btn" onclick="openContactReassignModal(${c.id})">Reassign</button>
              <button class="btn" onclick="openContactForm(${c.id})">Edit</button>
@@ -3370,7 +3704,7 @@ if (isset($_GET['background'])) {
             <td>${nameDisplay}</td>
             <td>${c.company || '-'}</td>
             <td>${c.type || 'Individual'}</td>
-            <td>${phoneDisplay}</td>
+            <td>${c.phone_number ? makePhoneClickable(c.phone_country, c.phone_number, c.name || c.company) : '-'}</td>
             <td>${c.email || '-'}</td>
             <td>${c.industry || '-'}</td>
             ${isAdmin ? `<td>${c.assigned_user || '<em style="color: var(--muted);">Unassigned</em>'}</td>` : ''}
@@ -3598,36 +3932,6 @@ if (isset($_GET['background'])) {
         console.error('Return to lead error:', e);
         alert('Error: ' + e.message);
       }
-    }
-    
-    async function initiateCall(contactId, phoneNumber) {
-      if (!confirm(`Call ${phoneNumber}?`)) return;
-      
-      try {
-        const response = await api('twilio.call', {
-          method: 'POST',
-          body: JSON.stringify({
-            contact_id: contactId,
-            to_number: phoneNumber
-          })
-        });
-        
-        if (response.ok) {
-          alert('Call initiated! Your DID will ring - answer it to be connected to the contact.');
-          // Only reload calls if we're on the calls view
-          if (currentView === 'calls') {
-            await loadCalls();
-          }
-        }
-      } catch (e) {
-        alert('Error initiating call: ' + e.message);
-      }
-    }
-    
-    async function initiateCallFromLead(leadId, phoneNumber) {
-      if (!confirm(`Call ${phoneNumber}? Note: This lead will need to be converted to a contact to log the call.`)) return;
-      
-      alert('Please convert this lead to a contact first to make calls.');
     }
     
     async function renderCalls() {
