@@ -10,6 +10,6 @@ WORKDIR /app
 
 COPY . /app
 
-EXPOSE 5000
+EXPOSE 3000
 
-CMD ["php", "-S", "0.0.0.0:5000", "-t", "public", "public/router.php"]
+CMD ["php", "-S", "0.0.0.0:3000", "-t", "public", "public/router.php"]
