@@ -432,14 +432,13 @@ function api_login() {
     
     // Generate magic link token (10 minute expiry)
     $token = bin2hex(random_bytes(32));
-    $expires_at = date('Y-m-d H:i:s', time() + 600); // 10 minutes
     
     // Delete any existing login magic links for this email
     $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'login'")->execute([':email' => $email]);
     
-    // Insert new magic link
-    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', :expires)")
-      ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT), ':expires' => $expires_at]);
+    // Insert new magic link with database-calculated expiration time
+    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', NOW() + INTERVAL '10 minutes')")
+      ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT)]);
     
     // Build magic link URL
     $magic_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/?magic_token=' . urlencode($token);
@@ -679,14 +678,13 @@ function api_send_invite() {
   
   // Generate invitation token (24 hour expiry)
   $token = bin2hex(random_bytes(32));
-  $expires_at = date('Y-m-d H:i:s', time() + 86400); // 24 hours
   
   // Delete any existing invite magic links for this email
   $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'invite'")->execute([':email' => $email]);
   
-  // Store invitation in magic_links table
-  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, :exp)")
-    ->execute([':e' => $email, ':t' => password_hash($token, PASSWORD_DEFAULT), ':r' => $role, ':exp' => $expires_at]);
+  // Store invitation in magic_links table with database-calculated expiration time
+  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, NOW() + INTERVAL '24 hours')")
+    ->execute([':e' => $email, ':t' => password_hash($token, PASSWORD_DEFAULT), ':r' => $role]);
   
   // Send invite email
   $setup_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/?invite_token=' . urlencode($token);
