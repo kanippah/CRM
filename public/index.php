@@ -300,14 +300,16 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_projects_assigned ON projects(assigned_to);
 SQL);
 
+  // Ensure admin user exists with correct credentials
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
   if (!$admin_exists) {
     $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koaditech.com', :pwd, 'Administrator', 'admin')")
       ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
+  } else {
+    // Update existing admin with correct email and password
+    $pdo->prepare("UPDATE users SET email = 'admin@koaditech.com', password = :pwd WHERE role = 'admin'")
+      ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
   }
-  
-  // Update existing admin user to have email if missing
-  $pdo->exec("UPDATE users SET email = 'admin@koaditech.com' WHERE username = 'admin' AND (email IS NULL OR email = '')");
   
   // Set all existing users to active status if NULL
   $pdo->exec("UPDATE users SET status = 'active' WHERE status IS NULL");
@@ -1624,13 +1626,13 @@ function api_twilio_numbers() {
 
 if (isset($_GET['logo'])) {
   header('Content-Type: image/png');
-  readfile('logo.png');
+  readfile(__DIR__ . '/logo.png');
   exit;
 }
 
 if (isset($_GET['favicon'])) {
   header('Content-Type: image/png');
-  readfile('favicon.png');
+  readfile(__DIR__ . '/favicon.png');
   exit;
 }
 
@@ -1642,7 +1644,7 @@ if (isset($_GET['twilio-sdk'])) {
 
 if (isset($_GET['background'])) {
   header('Content-Type: image/jpeg');
-  readfile('background.jpg');
+  readfile(__DIR__ . '/background.jpg');
   exit;
 }
 ?>
