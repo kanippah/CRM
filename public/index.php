@@ -550,15 +550,8 @@ function api_verify_magic_link() {
   $stmt->execute([':type' => $type]);
   $links = $stmt->fetchAll();
   
-  error_log("DEBUG: Found " . count($links) . " valid magic links for type: {$type}");
-  error_log("DEBUG: Received token length: " . strlen($token) . ", Token starts with: " . substr($token, 0, 10));
-  
-  $verified = false;
   foreach ($links as $link) {
-    error_log("DEBUG: Checking link ID {$link['id']}, stored hash length: " . strlen($link['token']));
     if (password_verify($token, $link['token'])) {
-      error_log("DEBUG: Token verified successfully for link ID {$link['id']}");
-      $verified = true;
       if ($type === 'login') {
         // Find the user
         $userStmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:e)");
@@ -596,13 +589,7 @@ function api_verify_magic_link() {
           'role' => $link['role']
         ]]);
       }
-    } else {
-      error_log("DEBUG: Token verification failed for link ID {$link['id']}");
     }
-  }
-  
-  if (!$verified) {
-    error_log("DEBUG: No valid token match found among " . count($links) . " links");
   }
   
   respond(['error' => 'Invalid or expired magic link'], 400);
@@ -2283,20 +2270,24 @@ if (isset($_GET['background'])) {
           body: JSON.stringify({ token: token, type: 'login' })
         });
         
+        console.log('Magic link verification result:', result);
+        
         if (result.ok && result.user) {
           currentUser = result.user;
           window.history.replaceState({}, document.title, window.location.origin);
           renderApp();
         } else {
-          throw new Error('Verification failed');
+          throw new Error('Verification failed: ' + JSON.stringify(result));
         }
       } catch (e) {
+        console.error('Magic link verification error:', e.message);
         document.getElementById('app').innerHTML = `
           <div class="login-container">
             <div class="login-box">
               <img src="?logo" alt="Koadi Technology">
               <h2 style="margin-bottom: 24px; color: #dc3545;">Link Expired</h2>
               <p style="color: var(--muted); text-align: center; margin-bottom: 20px;">This login link has expired or is invalid. Login links are valid for 10 minutes.</p>
+              <p style="color: var(--muted); text-align: center; font-size: 12px; margin-bottom: 20px;">Error details: ${e.message}</p>
               <button class="btn" style="width: 100%;" onclick="window.location.href = window.location.origin;">Request New Link</button>
             </div>
           </div>
