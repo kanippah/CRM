@@ -1,18 +1,12 @@
 <?php
-$uri = $_SERVER['REQUEST_URI'];
-$path = parse_url($uri, PHP_URL_PATH);
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$static_extensions = ['png', 'jpg', 'jpeg', 'gif', 'ico', 'svg', 'css', 'js', 'woff', 'woff2', 'ttf', 'eot'];
+$extension = strtolower(pathinfo($uri, PATHINFO_EXTENSION));
 
-$static_files = [
-    '/logo.png',
-    '/favicon.png',
-    '/background.jpg',
-    '/twilio.min.js'
-];
-
-if (in_array($path, $static_files)) {
-    $file = __DIR__ . $path;
-    if (file_exists($file)) {
-        $ext = pathinfo($file, PATHINFO_EXTENSION);
+// Serve static files
+if (in_array($extension, $static_extensions)) {
+    $file = __DIR__ . $uri;
+    if (file_exists($file) && is_file($file)) {
         $mime_types = [
             'png' => 'image/png',
             'jpg' => 'image/jpeg',
@@ -20,22 +14,19 @@ if (in_array($path, $static_files)) {
             'gif' => 'image/gif',
             'ico' => 'image/x-icon',
             'svg' => 'image/svg+xml',
-            'js' => 'application/javascript',
             'css' => 'text/css',
+            'js' => 'application/javascript',
+            'woff' => 'font/woff',
+            'woff2' => 'font/woff2',
+            'ttf' => 'font/ttf',
+            'eot' => 'application/vnd.ms-fontobject'
         ];
-        $mime = $mime_types[$ext] ?? 'application/octet-stream';
-        header('Content-Type: ' . $mime);
-        header('Content-Length: ' . filesize($file));
+        header('Content-Type: ' . ($mime_types[$extension] ?? 'application/octet-stream'));
+        header('Cache-Control: public, max-age=3600');
         readfile($file);
         exit;
     }
 }
 
-if (preg_match('/\.(?:css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/', $path)) {
-    $file = __DIR__ . $path;
-    if (file_exists($file)) {
-        return false;
-    }
-}
-
+// Route everything else to index.php
 require __DIR__ . '/index.php';
