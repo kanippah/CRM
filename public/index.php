@@ -2216,12 +2216,6 @@ if (isset($_GET['background'])) {
     }
     
     function renderLogin() {
-      const resetToken = new URLSearchParams(window.location.search).get('reset_token');
-      if (resetToken) {
-        renderResetPassword(resetToken);
-        return;
-      }
-      
       const inviteToken = new URLSearchParams(window.location.search).get('invite_token');
       if (inviteToken) {
         renderAcceptInvite(inviteToken);
@@ -2339,86 +2333,6 @@ if (isset($_GET['background'])) {
       renderLogin();
     }
     
-    function showForgotPassword() {
-      document.getElementById('app').innerHTML = `
-        <div class="login-container">
-          <div class="login-box">
-            <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">Forgot Password</h2>
-            <p style="color: var(--muted); margin-bottom: 20px;">Enter your email address and we'll send you a password reset link.</p>
-            <form onsubmit="handleForgotPassword(event)">
-              <div class="form-group">
-                <input type="email" name="email" placeholder="Email" autocomplete="email" required>
-              </div>
-              <button type="submit" class="btn" style="width: 100%;">Send Reset Link</button>
-              <button type="button" class="btn secondary" onclick="renderLogin()" style="width: 100%; margin-top: 12px;">Back to Login</button>
-            </form>
-          </div>
-        </div>
-      `;
-    }
-    
-    async function handleForgotPassword(e) {
-      e.preventDefault();
-      const form = e.target;
-      const email = form.email.value.trim();
-      
-      try {
-        const result = await api('forgot_password', {
-          method: 'POST',
-          body: JSON.stringify({ email })
-        });
-        alert(result.message || 'Reset link sent! Please check your email.');
-        renderLogin();
-      } catch (e) {
-        alert('Error: ' + e.message);
-      }
-    }
-    
-    function renderResetPassword(token) {
-      document.getElementById('app').innerHTML = `
-        <div class="login-container">
-          <div class="login-box">
-            <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">Reset Password</h2>
-            <p style="color: var(--muted); margin-bottom: 20px;">Enter your new password below.</p>
-            <form onsubmit="handleResetPassword(event, '${token}')">
-              <div class="form-group">
-                <input type="password" name="password" placeholder="New Password (min 8 characters)" required minlength="8">
-              </div>
-              <div class="form-group">
-                <input type="password" name="confirm_password" placeholder="Confirm New Password" required minlength="8">
-              </div>
-              <button type="submit" class="btn" style="width: 100%;">Reset Password</button>
-              <button type="button" class="btn secondary" onclick="window.location.href = window.location.origin;" style="width: 100%; margin-top: 12px;">Back to Login</button>
-            </form>
-          </div>
-        </div>
-      `;
-    }
-    
-    async function handleResetPassword(e, token) {
-      e.preventDefault();
-      const form = e.target;
-      const password = form.password.value;
-      const confirmPassword = form.confirm_password.value;
-      
-      if (password !== confirmPassword) {
-        alert('Passwords do not match!');
-        return;
-      }
-      
-      try {
-        const result = await api('reset_password', {
-          method: 'POST',
-          body: JSON.stringify({ token, password })
-        });
-        alert(result.message || 'Password reset successful! Please login with your new password.');
-        window.location.href = window.location.origin;
-      } catch (e) {
-        alert('Error: ' + e.message);
-      }
-    }
     
     function renderAcceptInvite(token) {
       document.getElementById('app').innerHTML = `
@@ -3054,7 +2968,6 @@ if (isset($_GET['background'])) {
                 <th>Email</th>
                 <th>Full Name</th>
                 <th>Role</th>
-                <th>Caller ID</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -3100,7 +3013,6 @@ if (isset($_GET['background'])) {
               <td><strong>${item.email || 'N/A'}</strong></td>
               <td>${item.full_name}</td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
-              <td>${callerIdDisplay}</td>
               <td>${statusBadge}</td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
@@ -3219,7 +3131,7 @@ if (isset($_GET['background'])) {
     function openInviteForm() {
       showModal(`
         <h3>Send User Invitation</h3>
-        <p style="color: var(--muted); margin-bottom: 20px;">Send an invitation link to a user's email. They will set up their own account with name and password.</p>
+        <p style="color: var(--muted); margin-bottom: 20px;">Send an invitation link to a user's email. They will set up their account with their full name.</p>
         <form onsubmit="sendInvite(event)">
           <div class="form-group">
             <label>Email *</label>
