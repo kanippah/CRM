@@ -143,7 +143,7 @@ function ensure_schema() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       email TEXT,
-      password TEXT NOT NULL,
+      password TEXT,
       full_name TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'sales',
       status TEXT DEFAULT 'active',
@@ -234,6 +234,19 @@ function ensure_schema() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     
+    CREATE TABLE IF NOT EXISTS magic_links (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL,
+      type TEXT NOT NULL,
+      role TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
+    CREATE INDEX IF NOT EXISTS idx_magic_links_expires ON magic_links(expires_at);
+    
     CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
     CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts (LOWER(BTRIM(COALESCE(company,''))));
@@ -300,15 +313,11 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_projects_assigned ON projects(assigned_to);
 SQL);
 
-  // Ensure admin user exists with correct credentials
+  // Ensure admin user exists (passwordless - login via magic link)
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
   if (!$admin_exists) {
-    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koaditech.com', :pwd, 'Administrator', 'admin')")
-      ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
-  } else {
-    // Update existing admin with correct email and password
-    $pdo->prepare("UPDATE users SET email = 'admin@koaditech.com', password = :pwd WHERE role = 'admin'")
-      ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
+    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koaditech.com', '', 'Administrator', 'admin')")
+      ->execute();
   }
   
   // Set all existing users to active status if NULL
@@ -336,8 +345,7 @@ if (isset($_GET['api'])) {
       case 'login': api_login(); break;
       case 'logout': api_logout(); break;
       case 'session': api_session(); break;
-      case 'forgot_password': api_forgot_password(); break;
-      case 'reset_password': api_reset_password(); break;
+      case 'verify_magic_link': api_verify_magic_link(); break;
       case 'send_invite': api_send_invite(); break;
       case 'accept_invite': api_accept_invite(); break;
       
@@ -417,8 +425,6 @@ function require_admin() {
 function api_login() {
   $b = body_json();
   $email = trim($b['email'] ?? '');
-  $password = $b['password'] ?? '';
-  $remember_me = $b['remember_me'] ?? false;
   
   // Validate email format
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -430,35 +436,57 @@ function api_login() {
   $stmt->execute([':e' => $email]);
   $user = $stmt->fetch();
   
-  if ($user && password_verify($password, $user['password'])) {
+  if ($user) {
     // Check if user is active
     if (isset($user['status']) && $user['status'] === 'inactive') {
       respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
     }
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['email'] = $user['email'];
-    $_SESSION['full_name'] = $user['full_name'];
-    $_SESSION['role'] = $user['role'];
     
-    // Handle remember me
-    if ($remember_me) {
-      $token = bin2hex(random_bytes(32));
-      $pdo->prepare("UPDATE users SET remember_token = :token WHERE id = :id")
-        ->execute([':token' => password_hash($token, PASSWORD_DEFAULT), ':id' => $user['id']]);
-      setcookie('remember_token', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true); // 30 days
-    }
+    // Generate magic link token (10 minute expiry)
+    $token = bin2hex(random_bytes(32));
+    $expires_at = date('Y-m-d H:i:s', time() + 600); // 10 minutes
     
-    respond(['ok' => true, 'user' => [
-      'id' => $user['id'],
-      'username' => $user['username'],
-      'email' => $user['email'],
-      'full_name' => $user['full_name'],
-      'role' => $user['role']
-    ]]);
-  } else {
-    respond(['error' => 'Invalid email or password'], 401);
+    // Delete any existing login magic links for this email
+    $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'login'")->execute([':email' => $email]);
+    
+    // Insert new magic link
+    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', :expires)")
+      ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT), ':expires' => $expires_at]);
+    
+    // Build magic link URL
+    $magic_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/?magic_token=' . urlencode($token);
+    
+    // Send email
+    $email_body = "
+      <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+        <div style='background: linear-gradient(135deg, #FF8C42, #0066CC); padding: 30px; text-align: center;'>
+          <h1 style='color: white; margin: 0;'>Koadi Tech CRM Login</h1>
+        </div>
+        <div style='padding: 30px; background: #f9f9f9;'>
+          <p>Hello {$user['full_name']},</p>
+          <p>Click the button below to securely log in to your Koadi Technology CRM account:</p>
+          <div style='text-align: center; margin: 30px 0;'>
+            <a href='{$magic_link}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Log In to CRM</a>
+          </div>
+          <p style='color: #666; font-size: 14px;'><strong>Security Notice:</strong></p>
+          <ul style='color: #666; font-size: 14px;'>
+            <li>This link is valid for <strong>10 minutes</strong> only</li>
+            <li>Do not share this link with anyone</li>
+            <li>If you didn't request this, please ignore this email</li>
+          </ul>
+          <p style='color: #999; font-size: 12px; margin-top: 30px;'>If the button doesn't work, copy and paste this link into your browser:<br><span style='word-break: break-all;'>{$magic_link}</span></p>
+        </div>
+        <div style='padding: 20px; background: #333; text-align: center;'>
+          <p style='color: #999; font-size: 12px; margin: 0;'>&copy; 2025 Koadi Technology LLC. All rights reserved.</p>
+        </div>
+      </div>
+    ";
+    
+    send_email($email, 'Your Koadi Tech CRM Login Link', $email_body);
   }
+  
+  // Always respond with success to prevent email enumeration
+  respond(['ok' => true, 'message' => 'If an account exists with this email, a login link has been sent.']);
 }
 
 function api_logout() {
@@ -508,6 +536,67 @@ function api_session() {
     }
   }
   respond(['user' => null]);
+}
+
+function api_verify_magic_link() {
+  $b = body_json();
+  $token = $b['token'] ?? '';
+  $type = $b['type'] ?? 'login';
+  
+  if (!$token) {
+    respond(['error' => 'Token is required'], 400);
+  }
+  
+  $pdo = db();
+  
+  // Get all valid magic links of the specified type
+  $stmt = $pdo->prepare("SELECT * FROM magic_links WHERE type = :type AND expires_at > NOW()");
+  $stmt->execute([':type' => $type]);
+  $links = $stmt->fetchAll();
+  
+  foreach ($links as $link) {
+    if (password_verify($token, $link['token'])) {
+      if ($type === 'login') {
+        // Find the user
+        $userStmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:e)");
+        $userStmt->execute([':e' => $link['email']]);
+        $user = $userStmt->fetch();
+        
+        if ($user) {
+          // Check if user is active
+          if (isset($user['status']) && $user['status'] === 'inactive') {
+            respond(['error' => 'Account is deactivated. Please contact administrator.'], 403);
+          }
+          
+          // Delete the used magic link
+          $pdo->prepare("DELETE FROM magic_links WHERE id = :id")->execute([':id' => $link['id']]);
+          
+          // Create session
+          $_SESSION['user_id'] = $user['id'];
+          $_SESSION['username'] = $user['username'];
+          $_SESSION['email'] = $user['email'];
+          $_SESSION['full_name'] = $user['full_name'];
+          $_SESSION['role'] = $user['role'];
+          
+          respond(['ok' => true, 'user' => [
+            'id' => $user['id'],
+            'username' => $user['username'],
+            'email' => $user['email'],
+            'full_name' => $user['full_name'],
+            'role' => $user['role']
+          ]]);
+        }
+      } elseif ($type === 'invite') {
+        // Return invite details for the accept form
+        respond(['ok' => true, 'invite' => [
+          'email' => $link['email'],
+          'role' => $link['role']
+        ]]);
+      }
+    }
+  }
+  
+  respond(['error' => 'Invalid or expired magic link'], 400);
 }
 
 function api_forgot_password() {
@@ -600,17 +689,21 @@ function api_send_invite() {
     respond(['error' => 'User with this email already exists'], 400);
   }
   
-  // Generate invitation token
+  // Generate invitation token (24 hour expiry)
   $token = bin2hex(random_bytes(32));
-  $expires_at = date('Y-m-d H:i:s', strtotime('+48 hours'));
+  $expires_at = date('Y-m-d H:i:s', time() + 86400); // 24 hours
   
-  // Store invitation
-  $pdo->prepare("INSERT INTO invitations (email, role, token, expires_at) VALUES (:e, :r, :t, :exp)")
-    ->execute([':e' => $email, ':r' => $role, ':t' => password_hash($token, PASSWORD_DEFAULT), ':exp' => $expires_at]);
+  // Delete any existing invite magic links for this email
+  $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'invite'")->execute([':email' => $email]);
+  
+  // Store invitation in magic_links table
+  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, :exp)")
+    ->execute([':e' => $email, ':t' => password_hash($token, PASSWORD_DEFAULT), ':r' => $role, ':exp' => $expires_at]);
   
   // Send invite email
   $setup_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/?invite_token=' . urlencode($token);
   
+  $role_display = ucfirst($role);
   $email_body = "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
       <div style='background: linear-gradient(135deg, #FF8C42, #0066CC); padding: 30px; text-align: center;'>
@@ -618,14 +711,19 @@ function api_send_invite() {
       </div>
       <div style='padding: 30px; background: #f9f9f9;'>
         <p>Hello,</p>
-        <p>You've been invited to join Koadi Technology CRM platform as a <strong>{$role}</strong> user.</p>
-        <p>Click the button below to set up your account with your name and password:</p>
+        <p>You've been invited to join <strong>Koadi Technology CRM</strong> as a <strong>{$role_display}</strong> user.</p>
+        <h3 style='color: #0066CC;'>What is Koadi Tech CRM?</h3>
+        <p>Koadi Technology CRM is a comprehensive customer relationship management platform that helps teams manage contacts, track calls, and organize sales pipelines efficiently.</p>
+        <p>Click the button below to complete your account setup:</p>
         <div style='text-align: center; margin: 30px 0;'>
-          <a href='{$setup_url}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Set Up My Account</a>
+          <a href='{$setup_url}' style='background: #0066CC; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;'>Accept Invitation</a>
         </div>
-        <p style='color: #666; font-size: 14px;'>This invitation link will expire in 48 hours.</p>
+        <p style='color: #666; font-size: 14px;'><strong>Important:</strong> This invitation link is valid for <strong>24 hours</strong> only.</p>
         <p style='color: #999; font-size: 12px; margin-top: 20px;'>If you didn't expect this invitation, you can safely ignore this email.</p>
-        <p style='margin-top: 30px; color: #999; font-size: 12px;'>This is an automated message from Koadi Technology CRM.</p>
+        <p style='color: #999; font-size: 12px; margin-top: 30px;'>If the button doesn't work, copy and paste this link into your browser:<br><span style='word-break: break-all;'>{$setup_url}</span></p>
+      </div>
+      <div style='padding: 20px; background: #333; text-align: center;'>
+        <p style='color: #999; font-size: 12px; margin: 0;'>&copy; 2025 Koadi Technology LLC. All rights reserved.</p>
       </div>
     </div>
   ";
@@ -641,37 +739,57 @@ function api_accept_invite() {
   $b = body_json();
   $token = $b['token'] ?? '';
   $full_name = trim($b['full_name'] ?? '');
-  $password = $b['password'] ?? '';
   
-  if (!$full_name || !$password) {
-    respond(['error' => 'Full name and password are required'], 400);
-  }
-  
-  if (strlen($password) < 8) {
-    respond(['error' => 'Password must be at least 8 characters'], 400);
+  if (!$full_name) {
+    respond(['error' => 'Full name is required'], 400);
   }
   
   $pdo = db();
-  $stmt = $pdo->query("SELECT * FROM invitations WHERE expires_at > NOW()");
+  $stmt = $pdo->query("SELECT * FROM magic_links WHERE type = 'invite' AND expires_at > NOW()");
   $invites = $stmt->fetchAll();
   
   foreach ($invites as $invite) {
     if (password_verify($token, $invite['token'])) {
-      // Create user account
+      // Create user account (passwordless)
       $username = explode('@', $invite['email'])[0];
-      $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, :p, :n, :r) RETURNING id");
+      
+      // Make username unique by adding a number if necessary
+      $base_username = $username;
+      $counter = 1;
+      while (true) {
+        $checkStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u");
+        $checkStmt->execute([':u' => $username]);
+        if (!$checkStmt->fetch()) break;
+        $username = $base_username . $counter;
+        $counter++;
+      }
+      
+      $stmt = $pdo->prepare("INSERT INTO users (email, username, password, full_name, role) VALUES (:e, :u, '', :n, :r) RETURNING id");
       $stmt->execute([
         ':e' => $invite['email'],
         ':u' => $username,
-        ':p' => password_hash($password, PASSWORD_DEFAULT),
         ':n' => $full_name,
         ':r' => $invite['role']
       ]);
+      $newUser = $stmt->fetch();
       
-      // Delete the invitation
-      $pdo->prepare("DELETE FROM invitations WHERE email = :email")->execute([':email' => $invite['email']]);
+      // Delete the used magic link
+      $pdo->prepare("DELETE FROM magic_links WHERE id = :id")->execute([':id' => $invite['id']]);
       
-      respond(['ok' => true, 'message' => 'Account created successfully! Please login.']);
+      // Auto-login the user
+      $_SESSION['user_id'] = $newUser['id'];
+      $_SESSION['username'] = $username;
+      $_SESSION['email'] = $invite['email'];
+      $_SESSION['full_name'] = $full_name;
+      $_SESSION['role'] = $invite['role'];
+      
+      respond(['ok' => true, 'auto_login' => true, 'user' => [
+        'id' => $newUser['id'],
+        'username' => $username,
+        'email' => $invite['email'],
+        'full_name' => $full_name,
+        'role' => $invite['role']
+      ]]);
     }
   }
   
@@ -682,7 +800,7 @@ function api_users_list() {
   require_admin();
   $pdo = db();
   $users = $pdo->query("SELECT id, username, email, full_name, role, status, caller_id, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
-  $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM invitations WHERE expires_at > NOW() ORDER BY id DESC")->fetchAll();
+  $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM magic_links WHERE type = 'invite' AND expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
   respond(['items' => $combined]);
@@ -778,7 +896,7 @@ function api_invitations_delete() {
   require_admin();
   $id = (int)($_GET['id'] ?? 0);
   $pdo = db();
-  $pdo->prepare("DELETE FROM invitations WHERE id=:id")->execute([':id' => $id]);
+  $pdo->prepare("DELETE FROM magic_links WHERE id=:id AND type='invite'")->execute([':id' => $id]);
   respond(['ok' => true]);
 }
 
@@ -2545,38 +2663,73 @@ if (isset($_GET['background'])) {
         return;
       }
       
+      const magicToken = new URLSearchParams(window.location.search).get('magic_token');
+      if (magicToken) {
+        verifyMagicLink(magicToken);
+        return;
+      }
+      
       document.getElementById('app').innerHTML = `
         <div class="login-container">
           <div class="login-box">
             <img src="?logo" alt="Koadi Technology">
             <h2 style="margin-bottom: 24px;">Koadi Tech CRM</h2>
-            <form onsubmit="handleLogin(event)">
-              <div class="form-group">
-                <input type="email" name="email" placeholder="Email" autocomplete="email" required>
-              </div>
-              <div class="form-group">
-                <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
-              </div>
-              <div class="form-group" style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
-                  <input type="checkbox" name="remember_me" style="width: auto;">
-                  <span>Remember Me</span>
-                </label>
-                <a href="#" onclick="event.preventDefault(); showForgotPassword();" style="color: var(--brand); text-decoration: none; font-size: 14px;">Forgot Password?</a>
-              </div>
-              <button type="submit" class="btn" style="width: 100%;">Login</button>
-            </form>
+            <div id="loginFormContainer">
+              <p style="color: var(--muted); margin-bottom: 20px; text-align: center;">Enter your email to receive a secure login link.</p>
+              <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                  <input type="email" name="email" placeholder="Email" autocomplete="email" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Send Login Link</button>
+              </form>
+            </div>
           </div>
         </div>
       `;
+    }
+    
+    async function verifyMagicLink(token) {
+      document.getElementById('app').innerHTML = `
+        <div class="login-container">
+          <div class="login-box">
+            <img src="?logo" alt="Koadi Technology">
+            <h2 style="margin-bottom: 24px;">Verifying...</h2>
+            <p style="color: var(--muted); text-align: center;">Please wait while we verify your login link.</p>
+          </div>
+        </div>
+      `;
+      
+      try {
+        const result = await api('verify_magic_link', {
+          method: 'POST',
+          body: JSON.stringify({ token: token, type: 'login' })
+        });
+        
+        if (result.ok && result.user) {
+          currentUser = result.user;
+          window.history.replaceState({}, document.title, window.location.origin);
+          renderApp();
+        } else {
+          throw new Error('Verification failed');
+        }
+      } catch (e) {
+        document.getElementById('app').innerHTML = `
+          <div class="login-container">
+            <div class="login-box">
+              <img src="?logo" alt="Koadi Technology">
+              <h2 style="margin-bottom: 24px; color: #dc3545;">Link Expired</h2>
+              <p style="color: var(--muted); text-align: center; margin-bottom: 20px;">This login link has expired or is invalid. Login links are valid for 10 minutes.</p>
+              <button class="btn" style="width: 100%;" onclick="window.location.href = window.location.origin;">Request New Link</button>
+            </div>
+          </div>
+        `;
+      }
     }
     
     async function handleLogin(e) {
       e.preventDefault();
       const form = e.target;
       const email = form.email.value.trim();
-      const password = form.password.value;
-      const remember_me = form.remember_me.checked;
       
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -2585,14 +2738,29 @@ if (isset($_GET['background'])) {
         return;
       }
       
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      
       try {
         await api('login', {
           method: 'POST',
-          body: JSON.stringify({ email, password, remember_me })
+          body: JSON.stringify({ email })
         });
-        await checkSession();
+        
+        document.getElementById('loginFormContainer').innerHTML = `
+          <div style="text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 20px;">📧</div>
+            <h3 style="color: var(--brand); margin-bottom: 16px;">Check Your Email</h3>
+            <p style="color: var(--muted); margin-bottom: 20px;">We've sent a login link to <strong>${email}</strong></p>
+            <p style="color: var(--muted); font-size: 14px;">The link will expire in 10 minutes. Check your spam folder if you don't see it.</p>
+            <button class="btn secondary" style="width: 100%; margin-top: 20px;" onclick="renderLogin()">Send Another Link</button>
+          </div>
+        `;
       } catch (e) {
-        alert('Login failed: ' + e.message);
+        alert('Error: ' + e.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Login Link';
       }
     }
     
@@ -2688,20 +2856,13 @@ if (isset($_GET['background'])) {
         <div class="login-container">
           <div class="login-box">
             <img src="?logo" alt="Koadi Technology">
-            <h2 style="margin-bottom: 24px;">Set Up Your Account</h2>
-            <p style="color: var(--muted); margin-bottom: 20px;">Complete your account setup by entering your details below.</p>
+            <h2 style="margin-bottom: 24px;">Welcome to Koadi Tech CRM</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">Complete your account setup by entering your name below.</p>
             <form onsubmit="handleAcceptInvite(event, '${token}')">
               <div class="form-group">
-                <input type="text" name="full_name" placeholder="Full Name" required>
+                <input type="text" name="full_name" placeholder="Your Full Name" required>
               </div>
-              <div class="form-group">
-                <input type="password" name="password" placeholder="Password (min 8 characters)" required minlength="8">
-              </div>
-              <div class="form-group">
-                <input type="password" name="confirm_password" placeholder="Confirm Password" required minlength="8">
-              </div>
-              <button type="submit" class="btn" style="width: 100%;">Create Account</button>
-              <button type="button" class="btn secondary" onclick="window.location.href = window.location.origin;" style="width: 100%; margin-top: 12px;">Back to Login</button>
+              <button type="submit" class="btn" style="width: 100%;">Complete Setup</button>
             </form>
           </div>
         </div>
@@ -2711,27 +2872,38 @@ if (isset($_GET['background'])) {
     async function handleAcceptInvite(e, token) {
       e.preventDefault();
       const form = e.target;
-      const password = form.password.value;
-      const confirmPassword = form.confirm_password.value;
+      const fullName = form.full_name.value.trim();
       
-      if (password !== confirmPassword) {
-        alert('Passwords do not match!');
+      if (!fullName) {
+        alert('Please enter your full name');
         return;
       }
+      
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Setting up...';
       
       try {
         const result = await api('accept_invite', {
           method: 'POST',
           body: JSON.stringify({
             token: token,
-            full_name: form.full_name.value,
-            password: password
+            full_name: fullName
           })
         });
-        alert(result.message || 'Account created successfully! Please login.');
-        window.location.href = window.location.origin;
+        
+        if (result.auto_login && result.user) {
+          currentUser = result.user;
+          window.history.replaceState({}, document.title, window.location.origin);
+          renderApp();
+        } else {
+          alert(result.message || 'Account created successfully!');
+          window.location.href = window.location.origin;
+        }
       } catch (e) {
         alert('Error: ' + e.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Complete Setup';
       }
     }
     
