@@ -445,8 +445,8 @@ function api_login() {
     // Delete any existing login magic links for this email
     $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'login'")->execute([':email' => $email]);
     
-    // Insert new magic link with database-calculated expiration time (UTC)
-    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ) + INTERVAL '10 minutes')")
+    // Insert new magic link with expiration time (10 minutes from now)
+    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', now() + INTERVAL '10 minutes')")
       ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT)]);
     
     // Build magic link URL
@@ -545,10 +545,12 @@ function api_verify_magic_link() {
   
   $pdo = db();
   
-  // Get all valid magic links of the specified type using UTC timezone
-  $stmt = $pdo->prepare("SELECT * FROM magic_links WHERE type = :type AND expires_at > CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ)");
+  // Get all valid magic links of the specified type
+  $stmt = $pdo->prepare("SELECT * FROM magic_links WHERE type = :type AND expires_at > now()");
   $stmt->execute([':type' => $type]);
   $links = $stmt->fetchAll();
+  
+  error_log("DEBUG: Found " . count($links) . " valid magic links for type: {$type}");
   
   foreach ($links as $link) {
     if (password_verify($token, $link['token'])) {
@@ -649,7 +651,7 @@ function api_reset_password() {
   }
   
   $pdo = db();
-  $stmt = $pdo->query("SELECT * FROM password_resets WHERE expires_at > CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ)");
+  $stmt = $pdo->query("SELECT * FROM password_resets WHERE expires_at > now()");
   $resets = $stmt->fetchAll();
   
   foreach ($resets as $reset) {
@@ -691,8 +693,8 @@ function api_send_invite() {
   // Delete any existing invite magic links for this email
   $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'invite'")->execute([':email' => $email]);
   
-  // Store invitation in magic_links table with database-calculated expiration time (UTC)
-  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ) + INTERVAL '24 hours')")
+  // Store invitation in magic_links table with expiration time (24 hours from now)
+  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, now() + INTERVAL '24 hours')")
     ->execute([':e' => $email, ':t' => password_hash($token, PASSWORD_DEFAULT), ':r' => $role]);
   
   // Send invite email
@@ -740,7 +742,7 @@ function api_accept_invite() {
   }
   
   $pdo = db();
-  $stmt = $pdo->query("SELECT * FROM magic_links WHERE type = 'invite' AND expires_at > CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ)");
+  $stmt = $pdo->query("SELECT * FROM magic_links WHERE type = 'invite' AND expires_at > now()");
   $invites = $stmt->fetchAll();
   
   foreach ($invites as $invite) {

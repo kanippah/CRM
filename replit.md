@@ -38,12 +38,13 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 
 ### 1. Fixed Magic Link Expiration Issue (Coolify)
 **Problem:** Magic links were always expired when verified in Coolify production environment.
-**Root Cause:** PostgreSQL's NOW() returns server-local time, which caused timezone mismatch during expiration comparison.
-**Solution:** Updated all magic link queries to properly cast UTC timestamps to TIMESTAMPTZ:
-- Link creation: Uses `CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ) + INTERVAL` to store UTC with timezone
-- Link verification: Uses `expires_at > CAST(NOW() AT TIME ZONE 'UTC' AS TIMESTAMPTZ)` for proper comparison
+**Root Cause:** Timezone confusion during timestamp comparison.
+**Solution:** Simplified all queries to use `now()` for timestamp comparison:
+- Link creation: Uses `now() + INTERVAL '10 minutes'` for login links
+- Link creation: Uses `now() + INTERVAL '24 hours'` for invitation links
+- Link verification: Simple comparison `expires_at > now()`
+- Since `expires_at` is stored as TIMESTAMPTZ (absolute time), PostgreSQL correctly handles comparison regardless of server timezone
 - Applies to: Login links (10 min), Invitation links (24 hrs), Password reset links (1 hr)
-- This ensures consistent UTC handling regardless of server timezone settings
 
 ### 2. Fixed Email Sending in Development
 **Problem:** Dev environment was failing SMTP connections to `mail.koaditech.com:465` (no internet).
