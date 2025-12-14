@@ -302,12 +302,12 @@ SQL);
 
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
   if (!$admin_exists) {
-    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koadi.tech', :pwd, 'Administrator', 'admin')")
+    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koaditech.com', :pwd, 'Administrator', 'admin')")
       ->execute([':pwd' => password_hash('admin123', PASSWORD_DEFAULT)]);
   }
   
   // Update existing admin user to have email if missing
-  $pdo->exec("UPDATE users SET email = 'admin@koadi.tech' WHERE username = 'admin' AND (email IS NULL OR email = '')");
+  $pdo->exec("UPDATE users SET email = 'admin@koaditech.com' WHERE username = 'admin' AND (email IS NULL OR email = '')");
   
   // Set all existing users to active status if NULL
   $pdo->exec("UPDATE users SET status = 'active' WHERE status IS NULL");
