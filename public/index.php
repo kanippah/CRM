@@ -48,6 +48,15 @@ function normalize_phone($country, $number) {
 function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
+  // In development mode, log emails instead of trying to send them
+  $is_dev = (getenv('APP_ENV') === 'development' || $_SERVER['HTTP_HOST'] === 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0') === 0 || strpos($_SERVER['HTTP_HOST'], 'localhost') !== false);
+  
+  if ($is_dev) {
+    error_log("DEV MODE: Email to {$to} - Subject: {$subject}");
+    error_log("DEV MODE: Email body:\n{$message}");
+    return true;
+  }
+  
   error_log("SMTP: Attempting to connect to {$SMTP_HOST}:{$SMTP_PORT}");
   
   $context = stream_context_create([
@@ -436,8 +445,8 @@ function api_login() {
     // Delete any existing login magic links for this email
     $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'login'")->execute([':email' => $email]);
     
-    // Insert new magic link with database-calculated expiration time
-    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', NOW() + INTERVAL '10 minutes')")
+    // Insert new magic link with database-calculated expiration time (UTC)
+    $pdo->prepare("INSERT INTO magic_links (email, token, type, expires_at) VALUES (:email, :token, 'login', (NOW() AT TIME ZONE 'UTC') + INTERVAL '10 minutes')")
       ->execute([':email' => $email, ':token' => password_hash($token, PASSWORD_DEFAULT)]);
     
     // Build magic link URL
@@ -536,8 +545,8 @@ function api_verify_magic_link() {
   
   $pdo = db();
   
-  // Get all valid magic links of the specified type
-  $stmt = $pdo->prepare("SELECT * FROM magic_links WHERE type = :type AND expires_at > NOW()");
+  // Get all valid magic links of the specified type using UTC timezone
+  $stmt = $pdo->prepare("SELECT * FROM magic_links WHERE type = :type AND expires_at AT TIME ZONE 'UTC' > NOW() AT TIME ZONE 'UTC'");
   $stmt->execute([':type' => $type]);
   $links = $stmt->fetchAll();
   
@@ -640,7 +649,7 @@ function api_reset_password() {
   }
   
   $pdo = db();
-  $stmt = $pdo->query("SELECT * FROM password_resets WHERE expires_at > NOW()");
+  $stmt = $pdo->query("SELECT * FROM password_resets WHERE expires_at AT TIME ZONE 'UTC' > NOW() AT TIME ZONE 'UTC'");
   $resets = $stmt->fetchAll();
   
   foreach ($resets as $reset) {
@@ -682,8 +691,8 @@ function api_send_invite() {
   // Delete any existing invite magic links for this email
   $pdo->prepare("DELETE FROM magic_links WHERE email = :email AND type = 'invite'")->execute([':email' => $email]);
   
-  // Store invitation in magic_links table with database-calculated expiration time
-  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, NOW() + INTERVAL '24 hours')")
+  // Store invitation in magic_links table with database-calculated expiration time (UTC)
+  $pdo->prepare("INSERT INTO magic_links (email, token, type, role, expires_at) VALUES (:e, :t, 'invite', :r, (NOW() AT TIME ZONE 'UTC') + INTERVAL '24 hours')")
     ->execute([':e' => $email, ':t' => password_hash($token, PASSWORD_DEFAULT), ':r' => $role]);
   
   // Send invite email
@@ -731,7 +740,7 @@ function api_accept_invite() {
   }
   
   $pdo = db();
-  $stmt = $pdo->query("SELECT * FROM magic_links WHERE type = 'invite' AND expires_at > NOW()");
+  $stmt = $pdo->query("SELECT * FROM magic_links WHERE type = 'invite' AND expires_at AT TIME ZONE 'UTC' > NOW() AT TIME ZONE 'UTC'");
   $invites = $stmt->fetchAll();
   
   foreach ($invites as $invite) {

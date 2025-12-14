@@ -34,6 +34,25 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **CSS:** Styling employs custom CSS properties for theming flexibility.
 - **Deployment:** Docker support is included via a `Dockerfile` for containerized deployments (e.g., Coolify), running on PHP 8.2 CLI with PostgreSQL extensions.
 
+## Recent Fixes (December 14, 2025)
+
+### 1. Fixed Magic Link Expiration Issue (Coolify)
+**Problem:** Magic links were always expired when verified in Coolify production environment.
+**Root Cause:** Timezone mismatch between PostgreSQL NOW() and server timezone during expiration comparison.
+**Solution:** Updated all magic link queries to explicitly use UTC timezone (`AT TIME ZONE 'UTC'`):
+- Login links: `expires_at AT TIME ZONE 'UTC' > NOW() AT TIME ZONE 'UTC'`
+- Invitation links: Same UTC timezone comparison
+- Password reset links: Same UTC timezone comparison
+- Link creation: Uses `NOW() AT TIME ZONE 'UTC'` to ensure consistent timezone
+
+### 2. Fixed Email Sending in Development
+**Problem:** Dev environment was failing SMTP connections to `mail.koaditech.com:465` (no internet).
+**Solution:** Added dev mode detection that logs emails instead of sending them:
+- Dev detection checks: `APP_ENV=development`, localhost, or 127.0.x.x
+- In dev: emails are logged to PHP error log with full content
+- In production: SMTP sending works as before
+- Allows testing magic link functionality in dev without email infrastructure
+
 ## External Dependencies
-- **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
-- **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication, specifically configured for `help@koaditech.com` via `mail.koaditech.com:465`.
+- **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). All timestamp comparisons use explicit UTC timezone to prevent expiration mismatches.
+- **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication, specifically configured for `help@koaditech.com` via `mail.koaditech.com:465`. Development mode bypasses SMTP and logs emails instead.
