@@ -1,0 +1,110 @@
+
+100
+Find in logs
+
+
+
+
+
+
+
+[Sun Dec 14 19:43:55 2025] 172.18.0.2:43296 Accepted
+[Sun Dec 14 19:43:55 2025] 172.18.0.2:43296 Closing
+[Sun Dec 14 19:43:58 2025] 172.18.0.2:43308 Accepted
+[Sun Dec 14 19:43:58 2025] SMTP: Attempting to connect to mail.koaditech.com:465
+[Sun Dec 14 19:43:58 2025] SMTP: Connected successfully
+[Sun Dec 14 19:43:59 2025] SMTP: Server greeting: 220 mail.koaditech.com
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-koaditech-email-server Axigen ESMTP hello
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-PIPELINING
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-AUTH PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-AUTH=PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-8BITMIME
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-BINARYMIME
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-CHUNKING
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-SIZE 104857600
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250-HELP
+[Sun Dec 14 19:43:59 2025] SMTP: EHLO response: 250 OK
+[Sun Dec 14 19:43:59 2025] SMTP: AUTH LOGIN response: 334 VXNlcm5hbWU6
+[Sun Dec 14 19:43:59 2025] SMTP: Username response: 334 UGFzc3dvcmQ6
+[Sun Dec 14 19:43:59 2025] SMTP: Password response: 235 Authentication successful
+[Sun Dec 14 19:43:59 2025] SMTP: MAIL FROM response: 250 Sender accepted
+[Sun Dec 14 19:43:59 2025] SMTP: RCPT TO response: 250 Recipient accepted
+[Sun Dec 14 19:43:59 2025] SMTP: DATA response: 354 Ready to receive data; remember .
+[Sun Dec 14 19:43:59 2025] SMTP: Send response: 250 Mail queued for delivery
+[Sun Dec 14 19:43:59 2025] SMTP: Email sent successfully to komla.anippah@koaditech.com
+[Sun Dec 14 19:43:59 2025] 172.18.0.2:43308 Closing
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56956 Accepted
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56956 Closing
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56962 Accepted
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56962 Closing
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56964 Accepted
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56978 Accepted
+[Sun Dec 14 19:44:10 2025] DEBUG: Found 1 valid magic links for type: login
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56978 Closing
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56988 Accepted
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:56964 Closing
+[Sun Dec 14 19:44:10 2025] 172.18.0.2:57002 Accepted
+[Sun Dec 14 19:44:11 2025] 172.18.0.2:56988 Closing
+[Sun Dec 14 19:44:11 2025] 172.18.0.2:57002 Closing
+[Sun Dec 14 19:44:13 2025] 172.18.0.2:41338 Accepted
+[Sun Dec 14 19:44:13 2025] 172.18.0.2:41338 Closing
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41348 Accepted
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41346 Accepted
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41346 Closing
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41348 Closing
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41366 Accepted
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41372 Accepted
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41366 Closing
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41384 Accepted
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41372 Closing
+[Sun Dec 14 19:44:14 2025] 172.18.0.2:41384 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41390 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41390 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41398 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41398 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41414 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41414 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41416 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41420 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41416 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41426 Accepted
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41420 Closing
+[Sun Dec 14 19:44:15 2025] 172.18.0.2:41426 Closing
+[Sun Dec 14 19:44:18 2025] 172.18.0.2:41440 Accepted
+[Sun Dec 14 19:44:18 2025] SMTP: Attempting to connect to mail.koaditech.com:465
+[Sun Dec 14 19:44:19 2025] SMTP: Connected successfully
+[Sun Dec 14 19:44:19 2025] SMTP: Server greeting: 220 mail.koaditech.com
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-koaditech-email-server Axigen ESMTP hello
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-PIPELINING
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-AUTH PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-AUTH=PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-8BITMIME
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-BINARYMIME
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-CHUNKING
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-SIZE 104857600
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250-HELP
+[Sun Dec 14 19:44:19 2025] SMTP: EHLO response: 250 OK
+[Sun Dec 14 19:44:19 2025] SMTP: AUTH LOGIN response: 334 VXNlcm5hbWU6
+[Sun Dec 14 19:44:19 2025] SMTP: Username response: 334 UGFzc3dvcmQ6
+[Sun Dec 14 19:44:19 2025] SMTP: Password response: 235 Authentication successful
+[Sun Dec 14 19:44:19 2025] SMTP: MAIL FROM response: 250 Sender accepted
+[Sun Dec 14 19:44:19 2025] SMTP: RCPT TO response: 250 Recipient accepted
+[Sun Dec 14 19:44:19 2025] SMTP: DATA response: 354 Ready to receive data; remember .
+[Sun Dec 14 19:44:19 2025] SMTP: Send response: 250 Mail queued for delivery
+[Sun Dec 14 19:44:19 2025] SMTP: Email sent successfully to komla.anippah@koaditech.com
+[Sun Dec 14 19:44:19 2025] 172.18.0.2:41440 Closing
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37664 Accepted
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37664 Closing
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37672 Accepted
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37672 Closing
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37688 Accepted
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37688 Closing
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37704 Accepted
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37716 Accepted
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37704 Closing
+[Sun Dec 14 19:44:27 2025] 172.18.0.2:37718 Accepted
+[Sun Dec 14 19:44:28 2025] DEBUG: Found 1 valid magic links for type: login
+[Sun Dec 14 19:44:28 2025] 172.18.0.2:37716 Closing
+[Sun Dec 14 19:44:28 2025] 172.18.0.2:37718 Closing
+[Sun Dec 14 19:44:28 2025] 172.18.0.2:37722 Accepted
+[Sun Dec 14 19:44:28 2025] 172.18.0.2:37722 Closing

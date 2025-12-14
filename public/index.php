@@ -551,9 +551,14 @@ function api_verify_magic_link() {
   $links = $stmt->fetchAll();
   
   error_log("DEBUG: Found " . count($links) . " valid magic links for type: {$type}");
+  error_log("DEBUG: Received token length: " . strlen($token) . ", Token starts with: " . substr($token, 0, 10));
   
+  $verified = false;
   foreach ($links as $link) {
+    error_log("DEBUG: Checking link ID {$link['id']}, stored hash length: " . strlen($link['token']));
     if (password_verify($token, $link['token'])) {
+      error_log("DEBUG: Token verified successfully for link ID {$link['id']}");
+      $verified = true;
       if ($type === 'login') {
         // Find the user
         $userStmt = $pdo->prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(:e)");
@@ -591,7 +596,13 @@ function api_verify_magic_link() {
           'role' => $link['role']
         ]]);
       }
+    } else {
+      error_log("DEBUG: Token verification failed for link ID {$link['id']}");
     }
+  }
+  
+  if (!$verified) {
+    error_log("DEBUG: No valid token match found among " . count($links) . " links");
   }
   
   respond(['error' => 'Invalid or expired magic link'], 400);
