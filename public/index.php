@@ -2459,6 +2459,13 @@ if (isset($_GET['background'])) {
     }
     
     function switchView(view) {
+      // Validate that the view exists before switching to it
+      const viewElement = document.getElementById('view-' + view);
+      if (!viewElement) {
+        // If view doesn't exist (e.g., sales user trying to access admin view), fallback to dashboard
+        view = 'dashboard';
+      }
+      
       currentView = view;
       localStorage.setItem('crm_current_view', view);
       document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
