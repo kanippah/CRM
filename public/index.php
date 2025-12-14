@@ -2456,9 +2456,6 @@ if (isset($_GET['background'])) {
       
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
       switchView(savedView);
-      
-      // Initialize Twilio device for calling
-      initTwilioDevice();
     }
     
     function switchView(view) {
@@ -2985,6 +2982,8 @@ if (isset($_GET['background'])) {
       const data = await api('users.list');
       const tbody = document.querySelector('#usersTable tbody');
       
+      if (!tbody) return; // Safety check if table doesn't exist
+      
       tbody.innerHTML = data.items.map(item => {
         if (item.type === 'invite') {
           return `
@@ -2992,7 +2991,6 @@ if (isset($_GET['background'])) {
               <td><strong>${item.email}</strong></td>
               <td><em>Pending invitation</em></td>
               <td><span class="badge ${item.role}">${item.role}</span></td>
-              <td>-</td>
               <td><span class="badge" style="background: var(--kt-yellow); color: #000;">Invited</span></td>
               <td>${new Date(item.created_at).toLocaleDateString()}</td>
               <td>
