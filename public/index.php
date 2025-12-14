@@ -2162,23 +2162,6 @@ if (isset($_GET['background'])) {
       background: #c82333;
     }
     
-    .phone-link {
-      color: var(--brand);
-      text-decoration: none;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    
-    .phone-link:hover {
-      text-decoration: underline;
-    }
-    
-    .phone-link::before {
-      content: "📞";
-      font-size: 14px;
-    }
   </style>
 </head>
 <body data-theme="dark">
@@ -2194,106 +2177,6 @@ if (isset($_GET['background'])) {
     let currentLeadIndustry = localStorage.getItem('crm_lead_industry') || '';
     let projectViewMode = 'kanban';
     let sidebarCollapsed = false;
-    
-        
-      } catch (error) {
-      }
-    }
-    
-    // Make a call
-        alert('Phone system not initialized. Please contact administrator.');
-        return;
-      }
-      
-      try {
-        // Show call widget
-        document.getElementById('callContactName').textContent = contactName;
-        document.getElementById('callNumber').textContent = phoneNumber;
-        document.getElementById('callStatus').textContent = 'Calling...';
-        document.getElementById('callTimer').textContent = '00:00';
-        document.getElementById('muteBtn').style.display = 'none';
-        
-        // Make the call using SDK v2.x API
-        const params = { To: phoneNumber };
-        
-        // Setup call event listeners
-        currentCall.on('accept', () => {
-          console.log('Call connected');
-          document.getElementById('muteBtn').style.display = 'inline-block';
-        });
-        
-        currentCall.on('disconnect', () => {
-          console.log('Call ended');
-          stopCallTimer();
-          currentCall = null;
-        });
-        
-        currentCall.on('cancel', () => {
-          console.log('Call cancelled');
-          currentCall = null;
-        });
-        
-      } catch (error) {
-        console.error('Call failed:', error);
-        const errorMsg = error?.message || 'Twilio credentials invalid. Please contact administrator to verify Account SID, Auth Token, and TwiML App SID.';
-        alert('Failed to make call: ' + errorMsg);
-      }
-    }
-    
-    // Hangup call
-      if (currentCall) {
-        currentCall.disconnect();
-      }
-    }
-    
-    // Toggle mute
-      if (!currentCall) return;
-      
-      isMuted = !isMuted;
-      currentCall.mute(isMuted);
-      
-      const muteBtn = document.getElementById('muteBtn');
-      if (isMuted) {
-        muteBtn.textContent = 'Unmute';
-        muteBtn.classList.remove('call-btn-secondary');
-        muteBtn.classList.add('call-btn-primary');
-      } else {
-        muteBtn.textContent = 'Mute';
-        muteBtn.classList.remove('call-btn-primary');
-        muteBtn.classList.add('call-btn-secondary');
-      }
-    }
-    
-    // Close call widget
-      stopCallTimer();
-      isMuted = false;
-      const muteBtn = document.getElementById('muteBtn');
-      muteBtn.textContent = 'Mute';
-      muteBtn.classList.remove('call-btn-primary');
-      muteBtn.classList.add('call-btn-secondary');
-    }
-    
-    // Update call status
-      document.getElementById('callStatus').textContent = status;
-    }
-    
-    // Start call timer
-      callStartTime = Date.now();
-      callTimer = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
-        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-        const seconds = (elapsed % 60).toString().padStart(2, '0');
-        document.getElementById('callTimer').textContent = `${minutes}:${seconds}`;
-      }, 1000);
-    }
-    
-    // Stop call timer
-    function stopCallTimer() {
-      if (callTimer) {
-        clearInterval(callTimer);
-        callTimer = null;
-      }
-    }
     
     // Helper function to format phone for display
     function makePhoneClickable(phoneCountry, phoneNumber, contactName = '') {
