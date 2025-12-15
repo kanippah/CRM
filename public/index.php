@@ -2169,6 +2169,196 @@ if (isset($_GET['background'])) {
       background: #c82333;
     }
     
+    /* Mobile Bottom Navigation */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 8px 0;
+      z-index: 1000;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .mobile-nav-inner {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    
+    .mobile-nav button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 10px;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: color 0.2s;
+      min-width: 50px;
+    }
+    
+    .mobile-nav button .icon {
+      font-size: 20px;
+    }
+    
+    .mobile-nav button.active {
+      color: var(--brand);
+    }
+    
+    .mobile-nav button:hover {
+      color: var(--brand);
+    }
+    
+    /* Table container for horizontal scroll on mobile */
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none !important;
+      }
+      
+      .sidebar-toggle {
+        display: none !important;
+      }
+      
+      .mobile-nav {
+        display: block;
+      }
+      
+      .app {
+        display: block;
+      }
+      
+      .content {
+        margin-left: 0;
+        padding: 16px;
+        padding-bottom: 80px; /* Space for bottom nav */
+        width: 100%;
+      }
+      
+      .toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      .toolbar .btn {
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+      
+      .toolbar input,
+      .toolbar select {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      
+      .card {
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      
+      table {
+        font-size: 13px;
+      }
+      
+      table th,
+      table td {
+        padding: 10px 8px;
+        white-space: nowrap;
+      }
+      
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        padding: 12px;
+        font-size: 16px; /* Prevents zoom on iOS */
+      }
+      
+      .btn {
+        padding: 12px 20px;
+        font-size: 15px;
+      }
+      
+      .modal-overlay .modal {
+        width: 95%;
+        max-width: none;
+        margin: 10px;
+        max-height: 90vh;
+      }
+      
+      .tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 8px;
+      }
+      
+      .tabs button {
+        padding: 10px 16px;
+        font-size: 13px;
+      }
+      
+      .kanban {
+        flex-direction: column;
+      }
+      
+      .kanban-column {
+        width: 100%;
+        min-width: 100%;
+      }
+      
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      
+      .stat-card h3 {
+        font-size: 24px;
+      }
+      
+      .login-box {
+        padding: 24px;
+        margin: 16px;
+      }
+      
+      h2 {
+        font-size: 20px;
+      }
+      
+      .user-info {
+        padding: 12px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .toolbar .btn {
+        width: 100%;
+      }
+      
+      table th,
+      table td {
+        padding: 8px 6px;
+        font-size: 12px;
+      }
+    }
+    
   </style>
 </head>
 <body data-theme="dark">
@@ -2452,6 +2642,50 @@ if (isset($_GET['background'])) {
             </footer>
           </main>
         </div>
+        
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-nav">
+          <div class="mobile-nav-inner">
+            <button onclick="switchView('dashboard')" data-view="dashboard">
+              <span class="icon">📊</span>
+              <span>Home</span>
+            </button>
+            <button onclick="switchView('contacts')" data-view="contacts">
+              <span class="icon">👥</span>
+              <span>Contacts</span>
+            </button>
+            <button onclick="switchView('calls')" data-view="calls">
+              <span class="icon">📞</span>
+              <span>Calls</span>
+            </button>
+            <button onclick="switchView('projects')" data-view="projects">
+              <span class="icon">📁</span>
+              <span>Projects</span>
+            </button>
+            <button onclick="switchView('leads')" data-view="leads">
+              <span class="icon">🎯</span>
+              <span>Leads</span>
+            </button>
+            ${isAdmin ? `
+            <button onclick="switchView('users')" data-view="users">
+              <span class="icon">⚙️</span>
+              <span>Users</span>
+            </button>
+            ` : ''}
+            <button onclick="switchView('settings')" data-view="settings">
+              <span class="icon">🔧</span>
+              <span>Settings</span>
+            </button>
+            <button onclick="toggleTheme()">
+              <span class="icon">🌓</span>
+              <span>Theme</span>
+            </button>
+            <button onclick="handleLogout()">
+              <span class="icon">🚪</span>
+              <span>Logout</span>
+            </button>
+          </div>
+        </nav>
       `;
       
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
@@ -2468,11 +2702,20 @@ if (isset($_GET['background'])) {
       
       currentView = view;
       localStorage.setItem('crm_current_view', view);
+      
+      // Update sidebar nav active state
       document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.nav button').forEach(b => {
         const text = b.textContent.toLowerCase();
         if (text.includes(view)) b.classList.add('active');
       });
+      
+      // Update mobile nav active state
+      document.querySelectorAll('.mobile-nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mobile-nav button[data-view]').forEach(b => {
+        if (b.dataset.view === view) b.classList.add('active');
+      });
+      
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + view).classList.add('active');
       
