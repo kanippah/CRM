@@ -2994,13 +2994,12 @@ if (isset($_GET['background'])) {
       const isAdmin = currentUser.role === 'admin';
       const isAssignedToMe = lead.assigned_to == currentUser.id;
       
-      const editButton = (isAdmin || isAssignedToMe) ? `<button class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>` : '';
+      const editButton = (isAdmin || isAssignedToMe) ? `<button type="button" class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>` : '';
       const assignButton = isAdmin ? `<button class="btn" onclick="closeModal(); openAssignModal(${id});">Assign</button>` : '';
       const deleteButton = isAdmin ? `<button class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>` : '';
 
-      const adminActions = (editButton || assignButton || deleteButton) ? `
+      const adminActions = (assignButton || deleteButton) ? `
         <div style="display: flex; gap: 8px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
-          ${editButton}
           ${assignButton}
           ${deleteButton}
         </div>
@@ -3053,8 +3052,11 @@ if (isset($_GET['background'])) {
             <label>Notes</label>
             <textarea name="notes" required></textarea>
           </div>
-          <button type="submit" class="btn">Add Interaction</button>
-          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="submit" class="btn">Add Interaction</button>
+            ${editButton}
+            <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+          </div>
         </form>
       `);
     }
