@@ -2992,12 +2992,17 @@ if (isset($_GET['background'])) {
       
       const interactions = await api(`interactions.list&lead_id=${id}`);
       const isAdmin = currentUser.role === 'admin';
+      const isAssignedToMe = lead.assigned_to == currentUser.id;
       
-      const adminActions = isAdmin ? `
+      const editButton = (isAdmin || isAssignedToMe) ? `<button class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>` : '';
+      const assignButton = isAdmin ? `<button class="btn" onclick="closeModal(); openAssignModal(${id});">Assign</button>` : '';
+      const deleteButton = isAdmin ? `<button class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>` : '';
+
+      const adminActions = (editButton || assignButton || deleteButton) ? `
         <div style="display: flex; gap: 8px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
-          <button class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>
-          <button class="btn" onclick="closeModal(); openAssignModal(${id});">Assign</button>
-          <button class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>
+          ${editButton}
+          ${assignButton}
+          ${deleteButton}
         </div>
       ` : '';
       
