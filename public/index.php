@@ -2995,13 +2995,12 @@ if (isset($_GET['background'])) {
       const isAssignedToMe = lead.assigned_to == currentUser.id;
       
       const editButton = (isAdmin || isAssignedToMe) ? `<button type="button" class="btn" onclick="closeModal(); openLeadForm(${id});">Edit</button>` : '';
+      const deleteButton = (isAdmin || isAssignedToMe) ? `<button type="button" class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>` : '';
       const assignButton = isAdmin ? `<button class="btn" onclick="closeModal(); openAssignModal(${id});">Assign</button>` : '';
-      const deleteButton = isAdmin ? `<button class="btn danger" onclick="deleteLead(${id}); closeModal();">Delete</button>` : '';
 
-      const adminActions = (assignButton || deleteButton) ? `
+      const adminActions = (assignButton) ? `
         <div style="display: flex; gap: 8px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
           ${assignButton}
-          ${deleteButton}
         </div>
       ` : '';
       
@@ -3052,9 +3051,10 @@ if (isset($_GET['background'])) {
             <label>Notes</label>
             <textarea name="notes" required></textarea>
           </div>
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="submit" class="btn">Add Interaction</button>
             ${editButton}
+            ${deleteButton}
             <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
           </div>
         </form>
