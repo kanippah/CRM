@@ -311,6 +311,68 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_calls_assigned ON calls(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_projects_assigned ON projects(assigned_to);
+    
+    -- Retell AI calls table for storing voice agent call data
+    CREATE TABLE IF NOT EXISTS retell_calls (
+      id SERIAL PRIMARY KEY,
+      retell_call_id TEXT UNIQUE NOT NULL,
+      agent_id TEXT,
+      call_type TEXT,
+      direction TEXT,
+      from_number TEXT,
+      to_number TEXT,
+      call_status TEXT,
+      disconnection_reason TEXT,
+      start_timestamp BIGINT,
+      end_timestamp BIGINT,
+      duration_seconds INTEGER,
+      transcript TEXT,
+      transcript_object JSONB,
+      analysis_results JSONB,
+      call_summary TEXT,
+      improvement_recommendations TEXT,
+      call_score INTEGER,
+      metadata JSONB,
+      raw_payload JSONB,
+      lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+      contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_retell_calls_retell_id ON retell_calls(retell_call_id);
+    CREATE INDEX IF NOT EXISTS idx_retell_calls_from ON retell_calls(from_number);
+    CREATE INDEX IF NOT EXISTS idx_retell_calls_to ON retell_calls(to_number);
+    CREATE INDEX IF NOT EXISTS idx_retell_calls_status ON retell_calls(call_status);
+    CREATE INDEX IF NOT EXISTS idx_retell_calls_created ON retell_calls(created_at);
+    
+    -- Calendar events table for bookings, schedules, and calls
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_type TEXT NOT NULL DEFAULT 'booking',
+      start_time TIMESTAMPTZ NOT NULL,
+      end_time TIMESTAMPTZ,
+      all_day BOOLEAN DEFAULT false,
+      location TEXT,
+      status TEXT DEFAULT 'scheduled',
+      related_entity_type TEXT,
+      related_entity_id INTEGER,
+      retell_call_id INTEGER REFERENCES retell_calls(id) ON DELETE SET NULL,
+      lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+      contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      color TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_start ON calendar_events(start_time);
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_assigned ON calendar_events(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_created_by ON calendar_events(created_by);
 SQL);
 
   // Ensure admin user exists (passwordless - login via magic link)
@@ -398,6 +460,13 @@ if (isset($_GET['api'])) {
       case 'import': api_import(); break;
       case 'reset': api_reset(); break;
       
+      case 'retell.webhook': api_retell_webhook(); break;
+      case 'retell_calls.list': api_retell_calls_list(); break;
+      case 'retell_calls.get': api_retell_calls_get(); break;
+      
+      case 'calendar.list': api_calendar_list(); break;
+      case 'calendar.save': api_calendar_save(); break;
+      case 'calendar.delete': api_calendar_delete(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -1553,6 +1622,440 @@ function api_reset() {
   respond(['ok' => true]);
 }
 
+// Retell AI Webhook Handler
+function api_retell_webhook() {
+  $rawPayload = file_get_contents('php://input');
+  
+  // Verify Retell signature if secret is configured
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT value FROM settings WHERE key = 'retell_webhook_secret'");
+  $stmt->execute();
+  $secretRow = $stmt->fetch();
+  $webhookSecret = $secretRow ? $secretRow['value'] : null;
+  
+  if ($webhookSecret) {
+    $signature = $_SERVER['HTTP_X_RETELL_SIGNATURE'] ?? '';
+    $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+    
+    if (!hash_equals($expectedSignature, $signature)) {
+      error_log("Retell webhook: Invalid signature");
+      respond(['error' => 'Invalid signature'], 401);
+    }
+  } else {
+    // Log warning if no secret configured but allow the request (for initial setup)
+    error_log("Retell webhook: No webhook secret configured - accepting unverified request");
+  }
+  
+  $data = json_decode($rawPayload, true);
+  
+  if (!$data) {
+    respond(['error' => 'Invalid JSON payload'], 400);
+  }
+  
+  $event = $data['event'] ?? '';
+  $call = $data['call'] ?? [];
+  
+  // Only process call_analyzed or call_ended events
+  if (!in_array($event, ['call_analyzed', 'call_ended'])) {
+    respond(['ok' => true, 'skipped' => true, 'reason' => 'Event type not processed']);
+  }
+  
+  $pdo = db();
+  
+  $retellCallId = $call['call_id'] ?? '';
+  if (!$retellCallId) {
+    respond(['error' => 'Missing call_id'], 400);
+  }
+  
+  // Extract call data
+  $agentId = $call['agent_id'] ?? null;
+  $callType = $call['call_type'] ?? null;
+  $direction = $call['direction'] ?? null;
+  $fromNumber = $call['from_number'] ?? null;
+  $toNumber = $call['to_number'] ?? null;
+  $callStatus = $call['call_status'] ?? null;
+  $disconnectionReason = $call['disconnection_reason'] ?? null;
+  $startTimestamp = $call['start_timestamp'] ?? null;
+  $endTimestamp = $call['end_timestamp'] ?? null;
+  
+  // Calculate duration
+  $durationSeconds = null;
+  if ($startTimestamp && $endTimestamp) {
+    $durationSeconds = (int)(($endTimestamp - $startTimestamp) / 1000);
+  }
+  
+  $transcript = $call['transcript'] ?? null;
+  $transcriptObject = isset($call['transcript_object']) ? json_encode($call['transcript_object']) : null;
+  $analysisResults = isset($call['analysis_results']) ? json_encode($call['analysis_results']) : null;
+  
+  // Extract improvement recommendations and call score from analysis if available
+  $analysisData = $call['analysis_results'] ?? [];
+  $callSummary = $analysisData['call_summary'] ?? $analysisData['summary'] ?? null;
+  $improvementRecommendations = $analysisData['improvement_recommendations'] ?? $analysisData['improvements'] ?? $analysisData['feedback'] ?? null;
+  $callScore = isset($analysisData['call_score']) ? (int)$analysisData['call_score'] : 
+               (isset($analysisData['quality_score']) ? (int)$analysisData['quality_score'] : null);
+  
+  $metadata = isset($call['metadata']) ? json_encode($call['metadata']) : null;
+  
+  // Try to match to a lead or contact by phone number
+  $leadId = null;
+  $contactId = null;
+  $phoneToMatch = $direction === 'inbound' ? $fromNumber : $toNumber;
+  
+  if ($phoneToMatch) {
+    // Normalize phone for matching
+    $normalizedPhone = preg_replace('/\D/', '', $phoneToMatch);
+    
+    // Try to find matching lead
+    $stmt = $pdo->prepare("SELECT id FROM leads WHERE regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = :phone LIMIT 1");
+    $stmt->execute([':phone' => $normalizedPhone]);
+    $lead = $stmt->fetch();
+    if ($lead) {
+      $leadId = $lead['id'];
+    }
+    
+    // Try to find matching contact
+    $stmt = $pdo->prepare("SELECT id FROM contacts WHERE regexp_replace(COALESCE(phone_country,'')||COALESCE(phone_number,''), '\\D', '', 'g') = :phone LIMIT 1");
+    $stmt->execute([':phone' => $normalizedPhone]);
+    $contact = $stmt->fetch();
+    if ($contact) {
+      $contactId = $contact['id'];
+    }
+  }
+  
+  // Upsert the call record
+  $stmt = $pdo->prepare("
+    INSERT INTO retell_calls 
+      (retell_call_id, agent_id, call_type, direction, from_number, to_number, call_status, 
+       disconnection_reason, start_timestamp, end_timestamp, duration_seconds, transcript, 
+       transcript_object, analysis_results, call_summary, improvement_recommendations, call_score,
+       metadata, raw_payload, lead_id, contact_id, updated_at)
+    VALUES 
+      (:retell_call_id, :agent_id, :call_type, :direction, :from_number, :to_number, :call_status,
+       :disconnection_reason, :start_timestamp, :end_timestamp, :duration_seconds, :transcript,
+       :transcript_object, :analysis_results, :call_summary, :improvement_recommendations, :call_score,
+       :metadata, :raw_payload, :lead_id, :contact_id, now())
+    ON CONFLICT (retell_call_id) DO UPDATE SET
+      call_status = EXCLUDED.call_status,
+      disconnection_reason = EXCLUDED.disconnection_reason,
+      end_timestamp = EXCLUDED.end_timestamp,
+      duration_seconds = EXCLUDED.duration_seconds,
+      transcript = EXCLUDED.transcript,
+      transcript_object = EXCLUDED.transcript_object,
+      analysis_results = EXCLUDED.analysis_results,
+      call_summary = EXCLUDED.call_summary,
+      improvement_recommendations = EXCLUDED.improvement_recommendations,
+      call_score = EXCLUDED.call_score,
+      raw_payload = EXCLUDED.raw_payload,
+      lead_id = COALESCE(EXCLUDED.lead_id, retell_calls.lead_id),
+      contact_id = COALESCE(EXCLUDED.contact_id, retell_calls.contact_id),
+      updated_at = now()
+    RETURNING id
+  ");
+  
+  $stmt->execute([
+    ':retell_call_id' => $retellCallId,
+    ':agent_id' => $agentId,
+    ':call_type' => $callType,
+    ':direction' => $direction,
+    ':from_number' => $fromNumber,
+    ':to_number' => $toNumber,
+    ':call_status' => $callStatus,
+    ':disconnection_reason' => $disconnectionReason,
+    ':start_timestamp' => $startTimestamp,
+    ':end_timestamp' => $endTimestamp,
+    ':duration_seconds' => $durationSeconds,
+    ':transcript' => $transcript,
+    ':transcript_object' => $transcriptObject,
+    ':analysis_results' => $analysisResults,
+    ':call_summary' => $callSummary,
+    ':improvement_recommendations' => $improvementRecommendations,
+    ':call_score' => $callScore,
+    ':metadata' => $metadata,
+    ':raw_payload' => $rawPayload,
+    ':lead_id' => $leadId,
+    ':contact_id' => $contactId
+  ]);
+  
+  $insertedCall = $stmt->fetch();
+  
+  // Create a calendar event for the call
+  if ($insertedCall && $startTimestamp) {
+    $startTime = date('c', $startTimestamp / 1000);
+    $endTime = $endTimestamp ? date('c', $endTimestamp / 1000) : null;
+    $callerNumber = $direction === 'inbound' ? $fromNumber : $toNumber;
+    $title = "AI Call: " . ($callerNumber ?: 'Unknown');
+    
+    $stmt = $pdo->prepare("
+      INSERT INTO calendar_events 
+        (title, description, event_type, start_time, end_time, status, retell_call_id, lead_id, contact_id, color)
+      VALUES 
+        (:title, :description, 'call', :start_time, :end_time, 'completed', :retell_call_id, :lead_id, :contact_id, '#FF8C42')
+      ON CONFLICT DO NOTHING
+    ");
+    $stmt->execute([
+      ':title' => $title,
+      ':description' => $callSummary ?: 'AI Voice Agent Call',
+      ':start_time' => $startTime,
+      ':end_time' => $endTime,
+      ':retell_call_id' => $insertedCall['id'],
+      ':lead_id' => $leadId,
+      ':contact_id' => $contactId
+    ]);
+  }
+  
+  respond(['ok' => true, 'call_id' => $insertedCall['id'] ?? null]);
+}
+
+function api_retell_calls_list() {
+  require_auth();
+  $pdo = db();
+  
+  $page = max(1, (int)($_GET['page'] ?? 1));
+  $limit = max(1, min(100, (int)($_GET['limit'] ?? 20)));
+  $offset = ($page - 1) * $limit;
+  $status = $_GET['status'] ?? '';
+  $direction = $_GET['direction'] ?? '';
+  $q = $_GET['q'] ?? '';
+  
+  $where_parts = [];
+  $params = [];
+  
+  if ($status) {
+    $where_parts[] = "rc.call_status = :status";
+    $params[':status'] = $status;
+  }
+  
+  if ($direction) {
+    $where_parts[] = "rc.direction = :direction";
+    $params[':direction'] = $direction;
+  }
+  
+  if ($q) {
+    $where_parts[] = "(rc.from_number ILIKE :q OR rc.to_number ILIKE :q OR rc.transcript ILIKE :q)";
+    $params[':q'] = "%$q%";
+  }
+  
+  $where_sql = count($where_parts) > 0 ? 'WHERE ' . implode(' AND ', $where_parts) : '';
+  
+  $count = $pdo->prepare("SELECT COUNT(*) FROM retell_calls rc $where_sql");
+  $count->execute($params);
+  $total = $count->fetchColumn();
+  
+  $params[':limit'] = $limit;
+  $params[':offset'] = $offset;
+  
+  $stmt = $pdo->prepare("
+    SELECT rc.*, 
+           l.name as lead_name, l.phone as lead_phone,
+           c.name as contact_name, c.phone_number as contact_phone
+    FROM retell_calls rc
+    LEFT JOIN leads l ON rc.lead_id = l.id
+    LEFT JOIN contacts c ON rc.contact_id = c.id
+    $where_sql
+    ORDER BY rc.created_at DESC
+    LIMIT :limit OFFSET :offset
+  ");
+  $stmt->execute($params);
+  $items = $stmt->fetchAll();
+  
+  respond([
+    'items' => $items,
+    'total' => (int)$total,
+    'page' => $page,
+    'pages' => ceil($total / $limit)
+  ]);
+}
+
+function api_retell_calls_get() {
+  require_auth();
+  $id = (int)($_GET['id'] ?? 0);
+  
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    SELECT rc.*, 
+           l.name as lead_name, l.phone as lead_phone,
+           c.name as contact_name, c.phone_number as contact_phone
+    FROM retell_calls rc
+    LEFT JOIN leads l ON rc.lead_id = l.id
+    LEFT JOIN contacts c ON rc.contact_id = c.id
+    WHERE rc.id = :id
+  ");
+  $stmt->execute([':id' => $id]);
+  $call = $stmt->fetch();
+  
+  if (!$call) {
+    respond(['error' => 'Call not found'], 404);
+  }
+  
+  respond(['item' => $call]);
+}
+
+function api_calendar_list() {
+  require_auth();
+  $pdo = db();
+  
+  $start = $_GET['start'] ?? date('Y-m-01');
+  $end = $_GET['end'] ?? date('Y-m-t', strtotime('+1 month'));
+  $type = $_GET['type'] ?? '';
+  
+  $where_parts = ["ce.start_time >= :start", "ce.start_time <= :end"];
+  $params = [':start' => $start, ':end' => $end];
+  
+  if ($type) {
+    $where_parts[] = "ce.event_type = :type";
+    $params[':type'] = $type;
+  }
+  
+  // Non-admins only see their own events or events related to their leads/contacts
+  $role = $_SESSION['role'];
+  $userId = $_SESSION['user_id'];
+  
+  if ($role !== 'admin') {
+    $where_parts[] = "(ce.created_by = :user_id OR ce.assigned_to = :user_id2 OR ce.lead_id IN (SELECT id FROM leads WHERE assigned_to = :user_id3))";
+    $params[':user_id'] = $userId;
+    $params[':user_id2'] = $userId;
+    $params[':user_id3'] = $userId;
+  }
+  
+  $where_sql = 'WHERE ' . implode(' AND ', $where_parts);
+  
+  $stmt = $pdo->prepare("
+    SELECT ce.*, 
+           l.name as lead_name,
+           c.name as contact_name,
+           u.full_name as created_by_name,
+           rc.from_number, rc.to_number, rc.direction
+    FROM calendar_events ce
+    LEFT JOIN leads l ON ce.lead_id = l.id
+    LEFT JOIN contacts c ON ce.contact_id = c.id
+    LEFT JOIN users u ON ce.created_by = u.id
+    LEFT JOIN retell_calls rc ON ce.retell_call_id = rc.id
+    $where_sql
+    ORDER BY ce.start_time ASC
+  ");
+  $stmt->execute($params);
+  $items = $stmt->fetchAll();
+  
+  respond(['items' => $items]);
+}
+
+function api_calendar_save() {
+  require_auth();
+  $b = body_json();
+  $pdo = db();
+  
+  $id = $b['id'] ?? null;
+  $title = trim($b['title'] ?? '');
+  $description = $b['description'] ?? null;
+  $eventType = $b['event_type'] ?? 'booking';
+  $startTime = $b['start_time'] ?? null;
+  $endTime = $b['end_time'] ?? null;
+  $allDay = $b['all_day'] ?? false;
+  $location = $b['location'] ?? null;
+  $status = $b['status'] ?? 'scheduled';
+  $leadId = $b['lead_id'] ?? null;
+  $contactId = $b['contact_id'] ?? null;
+  $assignedTo = $b['assigned_to'] ?? null;
+  $color = $b['color'] ?? null;
+  
+  if (!$title) {
+    respond(['error' => 'Title is required'], 400);
+  }
+  
+  if (!$startTime) {
+    respond(['error' => 'Start time is required'], 400);
+  }
+  
+  $userId = $_SESSION['user_id'];
+  
+  if ($id) {
+    $stmt = $pdo->prepare("
+      UPDATE calendar_events SET
+        title = :title,
+        description = :description,
+        event_type = :event_type,
+        start_time = :start_time,
+        end_time = :end_time,
+        all_day = :all_day,
+        location = :location,
+        status = :status,
+        lead_id = :lead_id,
+        contact_id = :contact_id,
+        assigned_to = :assigned_to,
+        color = :color,
+        updated_at = now()
+      WHERE id = :id
+      RETURNING *
+    ");
+    $stmt->execute([
+      ':id' => $id,
+      ':title' => $title,
+      ':description' => $description,
+      ':event_type' => $eventType,
+      ':start_time' => $startTime,
+      ':end_time' => $endTime,
+      ':all_day' => $allDay ? 'true' : 'false',
+      ':location' => $location,
+      ':status' => $status,
+      ':lead_id' => $leadId,
+      ':contact_id' => $contactId,
+      ':assigned_to' => $assignedTo,
+      ':color' => $color
+    ]);
+  } else {
+    $stmt = $pdo->prepare("
+      INSERT INTO calendar_events 
+        (title, description, event_type, start_time, end_time, all_day, location, status, 
+         lead_id, contact_id, created_by, assigned_to, color)
+      VALUES 
+        (:title, :description, :event_type, :start_time, :end_time, :all_day, :location, :status,
+         :lead_id, :contact_id, :created_by, :assigned_to, :color)
+      RETURNING *
+    ");
+    $stmt->execute([
+      ':title' => $title,
+      ':description' => $description,
+      ':event_type' => $eventType,
+      ':start_time' => $startTime,
+      ':end_time' => $endTime,
+      ':all_day' => $allDay ? 'true' : 'false',
+      ':location' => $location,
+      ':status' => $status,
+      ':lead_id' => $leadId,
+      ':contact_id' => $contactId,
+      ':created_by' => $userId,
+      ':assigned_to' => $assignedTo,
+      ':color' => $color
+    ]);
+  }
+  
+  $item = $stmt->fetch();
+  respond(['item' => $item]);
+}
+
+function api_calendar_delete() {
+  require_auth();
+  $id = (int)($_GET['id'] ?? 0);
+  
+  $pdo = db();
+  $role = $_SESSION['role'];
+  $userId = $_SESSION['user_id'];
+  
+  // Check ownership for non-admins
+  if ($role !== 'admin') {
+    $stmt = $pdo->prepare("SELECT created_by FROM calendar_events WHERE id = :id");
+    $stmt->execute([':id' => $id]);
+    $event = $stmt->fetch();
+    if (!$event || $event['created_by'] != $userId) {
+      respond(['error' => 'Not authorized to delete this event'], 403);
+    }
+  }
+  
+  $pdo->prepare("DELETE FROM calendar_events WHERE id = :id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
 
 if (isset($_GET['logo'])) {
   header('Content-Type: image/png');
@@ -2621,6 +3124,8 @@ if (isset($_GET['background'])) {
               <button onclick="switchView('dashboard')">📊 Dashboard</button>
               <button onclick="switchView('contacts')">👥 Contacts</button>
               <button onclick="switchView('calls')">📞 Calls</button>
+              <button onclick="switchView('ai-calls')">🤖 AI Calls</button>
+              <button onclick="switchView('calendar')">📅 Calendar</button>
               <button onclick="switchView('projects')">📁 Projects</button>
               <button onclick="switchView('leads')" class="active">🎯 Leads</button>
               ${isAdmin ? '<button onclick="switchView(\'users\')">⚙️ Users</button>' : ''}
@@ -2633,6 +3138,8 @@ if (isset($_GET['background'])) {
             <div id="view-dashboard" class="view"></div>
             <div id="view-contacts" class="view"></div>
             <div id="view-calls" class="view"></div>
+            <div id="view-ai-calls" class="view"></div>
+            <div id="view-calendar" class="view"></div>
             <div id="view-projects" class="view"></div>
             <div id="view-leads" class="view active"></div>
             ${isAdmin ? '<div id="view-users" class="view"></div>' : ''}
@@ -2661,6 +3168,14 @@ if (isset($_GET['background'])) {
             <button onclick="switchView('projects')" data-view="projects">
               <span class="icon">📁</span>
               <span>Projects</span>
+            </button>
+            <button onclick="switchView('ai-calls')" data-view="ai-calls">
+              <span class="icon">🤖</span>
+              <span>AI Calls</span>
+            </button>
+            <button onclick="switchView('calendar')" data-view="calendar">
+              <span class="icon">📅</span>
+              <span>Calendar</span>
             </button>
             <button onclick="switchView('leads')" data-view="leads">
               <span class="icon">🎯</span>
@@ -2706,8 +3221,9 @@ if (isset($_GET['background'])) {
       // Update sidebar nav active state
       document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.nav button').forEach(b => {
-        const text = b.textContent.toLowerCase();
-        if (text.includes(view)) b.classList.add('active');
+        const onclick = b.getAttribute('onclick') || '';
+        const viewMatch = onclick.match(/switchView\(['"]([^'"]+)['"]\)/);
+        if (viewMatch && viewMatch[1] === view) b.classList.add('active');
       });
       
       // Update mobile nav active state
@@ -2722,10 +3238,531 @@ if (isset($_GET['background'])) {
       if (view === 'dashboard') renderDashboard();
       if (view === 'contacts') renderContacts();
       if (view === 'calls') renderCalls();
+      if (view === 'ai-calls') renderAICalls();
+      if (view === 'calendar') renderCalendar();
       if (view === 'projects') renderProjects();
       if (view === 'leads') renderLeads();
       if (view === 'users') renderUsers();
       if (view === 'settings') renderSettings();
+    }
+    
+    let aiCallsPage = 1;
+    let aiCallsDirection = '';
+    let aiCallsSearch = '';
+    
+    async function renderAICalls() {
+      document.getElementById('view-ai-calls').innerHTML = `
+        <div class="toolbar">
+          <h2 style="margin: 0;">🤖 AI Voice Agent Calls</h2>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <select id="aiCallsDirection" onchange="filterAICalls()" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+              <option value="">All Directions</option>
+              <option value="inbound" ${aiCallsDirection === 'inbound' ? 'selected' : ''}>Inbound</option>
+              <option value="outbound" ${aiCallsDirection === 'outbound' ? 'selected' : ''}>Outbound</option>
+            </select>
+            <input type="text" class="search" id="aiCallsSearch" placeholder="Search calls..." value="${aiCallsSearch}" oninput="filterAICalls()" style="flex: 1; min-width: 200px;">
+          </div>
+        </div>
+        <div class="card">
+          <div id="aiCallsPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;"></div>
+          <div id="aiCallsList"></div>
+        </div>
+      `;
+      loadAICalls();
+    }
+    
+    async function filterAICalls() {
+      aiCallsDirection = document.getElementById('aiCallsDirection')?.value || '';
+      aiCallsSearch = document.getElementById('aiCallsSearch')?.value || '';
+      aiCallsPage = 1;
+      loadAICalls();
+    }
+    
+    async function loadAICalls() {
+      const params = new URLSearchParams({
+        page: aiCallsPage,
+        limit: 20,
+        direction: aiCallsDirection,
+        q: aiCallsSearch
+      });
+      
+      const data = await api('retell_calls.list&' + params.toString());
+      
+      const pagination = `
+        <button class="btn" onclick="aiCallsPage = 1; loadAICalls();" ${aiCallsPage === 1 ? 'disabled' : ''}>First</button>
+        <button class="btn" onclick="aiCallsPage--; loadAICalls();" ${aiCallsPage === 1 ? 'disabled' : ''}>Prev</button>
+        <span style="color: var(--muted);">Page ${data.page} of ${data.pages || 1} (${data.total} calls)</span>
+        <button class="btn" onclick="aiCallsPage++; loadAICalls();" ${aiCallsPage >= data.pages ? 'disabled' : ''}>Next</button>
+        <button class="btn" onclick="aiCallsPage = ${data.pages || 1}; loadAICalls();" ${aiCallsPage >= data.pages ? 'disabled' : ''}>Last</button>
+      `;
+      document.getElementById('aiCallsPagination').innerHTML = pagination;
+      
+      if (!data.items || data.items.length === 0) {
+        document.getElementById('aiCallsList').innerHTML = `
+          <div style="text-align: center; padding: 40px; color: var(--muted);">
+            <p style="font-size: 48px; margin-bottom: 20px;">🤖</p>
+            <p>No AI calls yet.</p>
+            <p style="font-size: 12px; margin-top: 10px;">Calls from your Retell AI voice agent will appear here.</p>
+          </div>
+        `;
+        return;
+      }
+      
+      const callsHtml = data.items.map(call => {
+        const startDate = call.start_timestamp ? new Date(call.start_timestamp).toLocaleString() : '-';
+        const duration = call.duration_seconds ? formatDuration(call.duration_seconds) : '-';
+        const callerName = call.lead_name || call.contact_name || 'Unknown';
+        const callerNumber = call.direction === 'inbound' ? call.from_number : call.to_number;
+        const directionIcon = call.direction === 'inbound' ? '📥' : '📤';
+        const scoreDisplay = call.call_score ? `<span class="badge" style="background: ${call.call_score >= 7 ? '#22c55e' : call.call_score >= 4 ? '#f59e0b' : '#ef4444'}; color: white;">${call.call_score}/10</span>` : '';
+        
+        return `
+          <div class="call-card" onclick="viewAICall(${call.id})" style="border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <div style="font-weight: bold; font-size: 16px;">${directionIcon} ${callerNumber || 'Unknown'}</div>
+                <div style="color: var(--muted); font-size: 12px;">${callerName}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 12px; color: var(--muted);">${startDate}</div>
+                <div style="font-size: 14px;">Duration: ${duration}</div>
+                ${scoreDisplay}
+              </div>
+            </div>
+            ${call.call_summary ? `<div style="margin-top: 10px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px;">${call.call_summary.substring(0, 150)}${call.call_summary.length > 150 ? '...' : ''}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      document.getElementById('aiCallsList').innerHTML = callsHtml;
+    }
+    
+    function formatDuration(seconds) {
+      if (!seconds) return '-';
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    }
+    
+    async function viewAICall(id) {
+      const data = await api(`retell_calls.get&id=${id}`);
+      const call = data.item;
+      
+      const startDate = call.start_timestamp ? new Date(call.start_timestamp).toLocaleString() : '-';
+      const endDate = call.end_timestamp ? new Date(call.end_timestamp).toLocaleString() : '-';
+      const duration = call.duration_seconds ? formatDuration(call.duration_seconds) : '-';
+      const callerName = call.lead_name || call.contact_name || 'Unknown Caller';
+      const callerNumber = call.direction === 'inbound' ? call.from_number : call.to_number;
+      
+      let analysisHtml = '';
+      if (call.analysis_results) {
+        try {
+          const analysis = typeof call.analysis_results === 'string' ? JSON.parse(call.analysis_results) : call.analysis_results;
+          const analysisItems = Object.entries(analysis).map(([key, value]) => {
+            const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            return `<div style="margin-bottom: 8px;"><strong>${label}:</strong> ${value}</div>`;
+          }).join('');
+          analysisHtml = `
+            <div class="form-group">
+              <label>Analysis Results</label>
+              <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">${analysisItems}</div>
+            </div>
+          `;
+        } catch (e) {}
+      }
+      
+      showModal(`
+        <h3>🤖 AI Call Details</h3>
+        <div class="form-group">
+          <label>Caller</label>
+          <div>${callerName}</div>
+          <div style="color: var(--muted); font-size: 13px;">${callerNumber || 'Unknown number'}</div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div class="form-group">
+            <label>Direction</label>
+            <div>${call.direction === 'inbound' ? '📥 Inbound' : '📤 Outbound'}</div>
+          </div>
+          <div class="form-group">
+            <label>Duration</label>
+            <div>${duration}</div>
+          </div>
+          <div class="form-group">
+            <label>Started</label>
+            <div>${startDate}</div>
+          </div>
+          <div class="form-group">
+            <label>Ended</label>
+            <div>${endDate}</div>
+          </div>
+        </div>
+        ${call.call_score ? `
+          <div class="form-group">
+            <label>Call Score</label>
+            <div style="font-size: 24px; font-weight: bold; color: ${call.call_score >= 7 ? '#22c55e' : call.call_score >= 4 ? '#f59e0b' : '#ef4444'};">${call.call_score}/10</div>
+          </div>
+        ` : ''}
+        ${call.call_summary ? `
+          <div class="form-group">
+            <label>Summary</label>
+            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">${call.call_summary}</div>
+          </div>
+        ` : ''}
+        ${call.improvement_recommendations ? `
+          <div class="form-group">
+            <label>💡 Improvement Recommendations</label>
+            <div style="background: #fef3c7; color: #92400e; padding: 15px; border-radius: 8px;">${call.improvement_recommendations}</div>
+          </div>
+        ` : ''}
+        ${analysisHtml}
+        ${call.transcript ? `
+          <div class="form-group">
+            <label>Transcript</label>
+            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 12px;">${call.transcript}</div>
+          </div>
+        ` : ''}
+        <div class="form-group">
+          <label>Disconnection Reason</label>
+          <div>${call.disconnection_reason || '-'}</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 20px;">
+          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+        </div>
+      `);
+    }
+    
+    let calendarYear = new Date().getFullYear();
+    let calendarMonth = new Date().getMonth();
+    let calendarView = 'month';
+    
+    async function renderCalendar() {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      document.getElementById('view-calendar').innerHTML = `
+        <div class="toolbar">
+          <h2 style="margin: 0;">📅 Calendar</h2>
+          <button class="btn" onclick="openEventForm()">+ Add Event</button>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn" onclick="prevMonth()">◀</button>
+              <span style="font-size: 18px; font-weight: bold; min-width: 180px; text-align: center;">
+                ${monthNames[calendarMonth]} ${calendarYear}
+              </span>
+              <button class="btn" onclick="nextMonth()">▶</button>
+              <button class="btn secondary" onclick="goToToday()">Today</button>
+            </div>
+            <div style="display: flex; gap: 5px;">
+              <button class="btn ${calendarView === 'month' ? '' : 'secondary'}" onclick="setCalendarView('month')">Month</button>
+              <button class="btn ${calendarView === 'week' ? '' : 'secondary'}" onclick="setCalendarView('week')">Week</button>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="calendarGrid"></div>
+      `;
+      loadCalendar();
+    }
+    
+    function prevMonth() {
+      calendarMonth--;
+      if (calendarMonth < 0) {
+        calendarMonth = 11;
+        calendarYear--;
+      }
+      renderCalendar();
+    }
+    
+    function nextMonth() {
+      calendarMonth++;
+      if (calendarMonth > 11) {
+        calendarMonth = 0;
+        calendarYear++;
+      }
+      renderCalendar();
+    }
+    
+    function goToToday() {
+      calendarYear = new Date().getFullYear();
+      calendarMonth = new Date().getMonth();
+      renderCalendar();
+    }
+    
+    function setCalendarView(view) {
+      calendarView = view;
+      renderCalendar();
+    }
+    
+    async function loadCalendar() {
+      const startDate = new Date(calendarYear, calendarMonth, 1);
+      const endDate = new Date(calendarYear, calendarMonth + 1, 0);
+      
+      const start = startDate.toISOString().split('T')[0];
+      const end = endDate.toISOString().split('T')[0] + 'T23:59:59';
+      
+      const data = await api(`calendar.list&start=${start}&end=${end}`);
+      const events = data.items || [];
+      
+      if (calendarView === 'month') {
+        renderMonthView(events);
+      } else {
+        renderWeekView(events);
+      }
+    }
+    
+    function renderMonthView(events) {
+      const firstDay = new Date(calendarYear, calendarMonth, 1);
+      const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+      const startPadding = firstDay.getDay();
+      const totalDays = lastDay.getDate();
+      
+      const today = new Date();
+      const isCurrentMonth = today.getFullYear() === calendarYear && today.getMonth() === calendarMonth;
+      
+      let grid = `
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);">
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Sun</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Mon</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Tue</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Wed</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Thu</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Fri</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Sat</div>
+      `;
+      
+      for (let i = 0; i < startPadding; i++) {
+        grid += `<div style="background: var(--bg); min-height: 80px; padding: 5px;"></div>`;
+      }
+      
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayEvents = events.filter(e => e.start_time && e.start_time.startsWith(dateStr));
+        const isToday = isCurrentMonth && today.getDate() === day;
+        
+        const eventDots = dayEvents.slice(0, 3).map(e => {
+          const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
+          return `<div onclick="event.stopPropagation(); viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.title.substring(0, 15)}</div>`;
+        }).join('');
+        
+        const moreEvents = dayEvents.length > 3 ? `<div style="font-size: 10px; color: var(--muted);">+${dayEvents.length - 3} more</div>` : '';
+        
+        grid += `
+          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 80px; padding: 5px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
+            <div style="font-weight: ${isToday ? 'bold' : 'normal'}; color: ${isToday ? 'var(--kt-orange)' : 'inherit'}; margin-bottom: 5px;">${day}</div>
+            ${eventDots}
+            ${moreEvents}
+          </div>
+        `;
+      }
+      
+      const remaining = (7 - ((startPadding + totalDays) % 7)) % 7;
+      for (let i = 0; i < remaining; i++) {
+        grid += `<div style="background: var(--bg); min-height: 80px; padding: 5px;"></div>`;
+      }
+      
+      grid += '</div>';
+      
+      grid += `
+        <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="width: 12px; height: 12px; background: #FF8C42; border-radius: 3px;"></div>
+            <span style="font-size: 12px;">AI Calls</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="width: 12px; height: 12px; background: #0066CC; border-radius: 3px;"></div>
+            <span style="font-size: 12px;">Bookings</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="width: 12px; height: 12px; background: #22c55e; border-radius: 3px;"></div>
+            <span style="font-size: 12px;">Schedules</span>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('calendarGrid').innerHTML = grid;
+    }
+    
+    function renderWeekView(events) {
+      const today = new Date();
+      const startOfWeek = new Date(calendarYear, calendarMonth, today.getDate() - today.getDay());
+      
+      let grid = `<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);">`;
+      
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayEvents = events.filter(e => e.start_time && e.start_time.startsWith(dateStr));
+        const isToday = date.toDateString() === today.toDateString();
+        
+        const eventList = dayEvents.map(e => {
+          const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
+          const time = new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return `<div onclick="viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 11px; padding: 5px; border-radius: 4px; margin-bottom: 5px; cursor: pointer;">
+            <div style="font-weight: bold;">${time}</div>
+            <div>${e.title}</div>
+          </div>`;
+        }).join('');
+        
+        grid += `
+          <div style="background: var(--panel); min-height: 200px; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
+            <div style="padding: 10px; text-align: center; border-bottom: 1px solid var(--border); ${isToday ? 'background: var(--kt-orange); color: white;' : ''}">
+              <div style="font-weight: bold;">${days[i]}</div>
+              <div style="font-size: 20px;">${date.getDate()}</div>
+            </div>
+            <div style="padding: 10px; overflow-y: auto; max-height: 300px;">
+              ${eventList || '<div style="color: var(--muted); font-size: 12px; text-align: center;">No events</div>'}
+            </div>
+          </div>
+        `;
+      }
+      
+      grid += '</div>';
+      document.getElementById('calendarGrid').innerHTML = grid;
+    }
+    
+    async function openEventForm(id = null, defaultDate = null) {
+      let event = { title: '', description: '', event_type: 'booking', start_time: '', end_time: '', location: '', all_day: false };
+      
+      if (id) {
+        const data = await api(`calendar.list&start=2020-01-01&end=2030-12-31`);
+        event = data.items.find(e => e.id === id) || event;
+      }
+      
+      if (defaultDate && !id) {
+        event.start_time = defaultDate + 'T09:00';
+        event.end_time = defaultDate + 'T10:00';
+      }
+      
+      const startTime = event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '';
+      const endTime = event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '';
+      
+      showModal(`
+        <h3>${id ? 'Edit Event' : 'New Event'}</h3>
+        <form onsubmit="saveEvent(event, ${id || 'null'})">
+          <div class="form-group">
+            <label>Title *</label>
+            <input type="text" name="title" value="${event.title || ''}" required>
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select name="event_type">
+              <option value="booking" ${event.event_type === 'booking' ? 'selected' : ''}>Booking</option>
+              <option value="schedule" ${event.event_type === 'schedule' ? 'selected' : ''}>Schedule</option>
+              <option value="meeting" ${event.event_type === 'meeting' ? 'selected' : ''}>Meeting</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Start Time *</label>
+            <input type="datetime-local" name="start_time" value="${startTime}" required>
+          </div>
+          <div class="form-group">
+            <label>End Time</label>
+            <input type="datetime-local" name="end_time" value="${endTime}">
+          </div>
+          <div class="form-group">
+            <label>Location</label>
+            <input type="text" name="location" value="${event.location || ''}">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea name="description">${event.description || ''}</textarea>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="submit" class="btn">Save</button>
+            ${id ? `<button type="button" class="btn danger" onclick="deleteEvent(${id})">Delete</button>` : ''}
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </div>
+        </form>
+      `);
+    }
+    
+    async function saveEvent(e, id) {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        id: id,
+        title: form.title.value,
+        event_type: form.event_type.value,
+        start_time: form.start_time.value,
+        end_time: form.end_time.value || null,
+        location: form.location.value,
+        description: form.description.value
+      };
+      
+      await api('calendar.save', data);
+      closeModal();
+      loadCalendar();
+    }
+    
+    async function viewEvent(id) {
+      const data = await api(`calendar.list&start=2020-01-01&end=2030-12-31`);
+      const event = data.items.find(e => e.id === id);
+      
+      if (!event) {
+        alert('Event not found');
+        return;
+      }
+      
+      const startTime = event.start_time ? new Date(event.start_time).toLocaleString() : '-';
+      const endTime = event.end_time ? new Date(event.end_time).toLocaleString() : '-';
+      const typeColors = { call: '#FF8C42', booking: '#0066CC', schedule: '#22c55e', meeting: '#8b5cf6' };
+      const color = event.color || typeColors[event.event_type] || '#6b7280';
+      
+      showModal(`
+        <h3>${event.title}</h3>
+        <div style="display: inline-block; background: ${color}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 15px; text-transform: uppercase;">${event.event_type}</div>
+        <div class="form-group">
+          <label>Start</label>
+          <div>${startTime}</div>
+        </div>
+        ${event.end_time ? `
+          <div class="form-group">
+            <label>End</label>
+            <div>${endTime}</div>
+          </div>
+        ` : ''}
+        ${event.location ? `
+          <div class="form-group">
+            <label>Location</label>
+            <div>${event.location}</div>
+          </div>
+        ` : ''}
+        ${event.description ? `
+          <div class="form-group">
+            <label>Description</label>
+            <div>${event.description}</div>
+          </div>
+        ` : ''}
+        ${event.lead_name ? `
+          <div class="form-group">
+            <label>Related Lead</label>
+            <div>${event.lead_name}</div>
+          </div>
+        ` : ''}
+        ${event.from_number || event.to_number ? `
+          <div class="form-group">
+            <label>Call Details</label>
+            <div>${event.direction === 'inbound' ? 'From: ' + event.from_number : 'To: ' + event.to_number}</div>
+          </div>
+        ` : ''}
+        <div style="display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
+          ${event.event_type !== 'call' ? `<button type="button" class="btn" onclick="closeModal(); openEventForm(${id})">Edit</button>` : ''}
+          ${event.event_type !== 'call' ? `<button type="button" class="btn danger" onclick="deleteEvent(${id})">Delete</button>` : ''}
+          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+        </div>
+      `);
+    }
+    
+    async function deleteEvent(id) {
+      if (!confirm('Are you sure you want to delete this event?')) return;
+      await api(`calendar.delete&id=${id}`);
+      closeModal();
+      loadCalendar();
     }
     
     async function renderLeads() {
@@ -4243,6 +5280,16 @@ if (isset($_GET['background'])) {
         </div>
         ${isAdmin ? `
         <div class="card" style="margin-top: 16px;">
+          <h3>🤖 Retell AI Integration</h3>
+          <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Configure your Retell AI webhook secret to secure incoming call data. Get this from your Retell AI dashboard.</p>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <input type="password" id="retellWebhookSecret" placeholder="Enter webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn" onclick="saveRetellSecret()">Save</button>
+            <button class="btn secondary" onclick="toggleRetellSecretVisibility()">👁️ Show</button>
+          </div>
+          <p style="color: var(--muted); margin-top: 12px; font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=retell.webhook</code></p>
+        </div>
+        <div class="card" style="margin-top: 16px;">
           <h3>Manage Industries</h3>
           <button class="btn" onclick="openIndustriesManagement()">Manage Industries</button>
         </div>
@@ -4267,6 +5314,25 @@ if (isset($_GET['background'])) {
         body: JSON.stringify({ key: 'defaultCountry', value })
       });
       alert('Default country saved');
+    }
+    
+    async function saveRetellSecret() {
+      const value = document.getElementById('retellWebhookSecret').value;
+      if (!value.trim()) {
+        alert('Please enter a webhook secret');
+        return;
+      }
+      await api('settings.set', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'retell_webhook_secret', value })
+      });
+      alert('Retell webhook secret saved');
+      document.getElementById('retellWebhookSecret').value = '';
+    }
+    
+    function toggleRetellSecretVisibility() {
+      const input = document.getElementById('retellWebhookSecret');
+      input.type = input.type === 'password' ? 'text' : 'password';
     }
     
     async function exportData() {

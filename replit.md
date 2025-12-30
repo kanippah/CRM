@@ -54,6 +54,52 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - In production: SMTP sending works as before
 - Allows testing magic link functionality in dev without email infrastructure
 
+## Recent Features (December 30, 2025)
+
+### Retell AI Voice Agent Integration
+**Purpose:** Receive and display post-call analysis from Retell AI voice agents.
+**Implementation:**
+- **Webhook Endpoint:** `?api=retell.webhook` receives POST data from Retell AI after each call
+- **Data Captured:** call_id, agent_id, direction (inbound/outbound), caller phone, duration, transcript, analysis results, call summary, improvement recommendations, call score
+- **Automatic Matching:** Incoming calls are automatically matched to existing leads/contacts by phone number
+- **Calendar Integration:** Each AI call automatically creates a calendar event
+
+### AI Calls Monitoring Page
+**Features:**
+- List view of all AI voice agent calls with pagination
+- Filter by direction (inbound/outbound) and search
+- Call cards show caller number, duration, date, and summary preview
+- Detailed view includes: transcript, call score (color-coded), improvement recommendations, analysis results
+- Accessible via "AI Calls" in sidebar and bottom mobile navigation
+
+### Calendar System
+**Features:**
+- Monthly and weekly views with navigation
+- Color-coded events: Orange for AI calls, Blue for bookings, Green for schedules
+- Click on any day to add a new event
+- Event types: Booking, Schedule, Meeting
+- AI calls from Retell automatically appear on the calendar
+- Events linked to leads and contacts when applicable
+
+### New Database Tables
+- **retell_calls:** Stores all Retell AI call data including transcripts, analysis, and recommendations
+- **calendar_events:** Stores all calendar events with polymorphic links to leads, contacts, and AI calls
+
+### New API Endpoints
+- `retell.webhook` - Webhook receiver for Retell AI (no auth required)
+- `retell_calls.list` - List all AI calls with pagination and filters
+- `retell_calls.get` - Get single AI call details
+- `calendar.list` - List calendar events by date range
+- `calendar.save` - Create/update calendar events
+- `calendar.delete` - Delete calendar events
+
+### Webhook Setup Instructions
+1. In Retell AI dashboard, go to Agent Settings → Webhook
+2. Set webhook URL to: `https://your-domain.com/?api=retell.webhook`
+3. Configure post-call analysis fields in Retell (call_summary, improvement_recommendations, call_score)
+4. Retell will send `call_analyzed` events automatically after each call
+
 ## External Dependencies
 - **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). All timestamp comparisons use explicit UTC timezone to prevent expiration mismatches.
 - **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication, specifically configured for `help@koaditech.com` via `mail.koaditech.com:465`. Development mode bypasses SMTP and logs emails instead.
+- **Retell AI:** Voice agent integration via webhook for post-call analysis. Calls are received at `?api=retell.webhook` endpoint.
