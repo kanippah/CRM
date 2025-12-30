@@ -3196,7 +3196,7 @@ if (isset($_GET['background'])) {
               <button onclick="switchView('dashboard')">📊 Dashboard</button>
               <button onclick="switchView('contacts')">👥 Contacts</button>
               <button onclick="switchView('calls')">📞 Calls</button>
-              <button onclick="switchView('ai-calls')">🤖 AI Calls</button>
+              <button onclick="switchView('ai-calls')">🤖 Voice AI calls</button>
               <button onclick="switchView('calendar')">📅 Calendar</button>
               <button onclick="switchView('projects')">📁 Projects</button>
               <button onclick="switchView('leads')" class="active">🎯 Leads</button>
@@ -3243,7 +3243,7 @@ if (isset($_GET['background'])) {
             </button>
             <button onclick="switchView('ai-calls')" data-view="ai-calls">
               <span class="icon">🤖</span>
-              <span>AI Calls</span>
+              <span>Voice AI calls</span>
             </button>
             <button onclick="switchView('calendar')" data-view="calendar">
               <span class="icon">📅</span>
@@ -3325,7 +3325,7 @@ if (isset($_GET['background'])) {
     async function renderAICalls() {
       document.getElementById('view-ai-calls').innerHTML = `
         <div class="toolbar">
-          <h2 style="margin: 0;">🤖 AI Voice Agent Calls</h2>
+          <h2 style="margin: 0;">🤖 Voice AI calls</h2>
         </div>
         <div class="card" style="margin-bottom: 20px;">
           <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
@@ -5361,6 +5361,12 @@ if (isset($_GET['background'])) {
             <button class="btn secondary" onclick="toggleRetellApiKeyVisibility()">👁️ Show</button>
           </div>
           <p style="color: var(--muted); margin-top: 12px; font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=retell.webhook</code></p>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <h3>📅 Cal.com Integration</h3>
+          <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Configure your Cal.com webhook to automatically sync bookings to your CRM calendar.</p>
+          <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=cal.webhook</code></p>
+          <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Trigger: <strong>Booking created</strong></p>
         </div>
         <div class="card" style="margin-top: 16px;">
           <h3>Manage Industries</h3>
