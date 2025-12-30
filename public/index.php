@@ -3517,7 +3517,8 @@ if (isset($_GET['background'])) {
       const end = endDate.toISOString().split('T')[0] + 'T23:59:59';
       
       const data = await api(`calendar.list&start=${start}&end=${end}`);
-      const events = data.items || [];
+      // Filter out AI calls - only show bookings, schedules, and meetings
+      const events = (data.items || []).filter(e => e.event_type !== 'call');
       
       if (calendarView === 'month') {
         renderMonthView(events);
