@@ -2080,6 +2080,23 @@ function api_cal_webhook() {
     respond(['error' => 'Invalid JSON payload'], 400);
   }
   
+  // Verify Cal.com signature if secret is configured
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT value FROM settings WHERE key = 'cal_webhook_secret'");
+  $stmt->execute();
+  $secretRow = $stmt->fetch();
+  $webhookSecret = $secretRow ? $secretRow['value'] : null;
+  
+  if ($webhookSecret) {
+    $signature = $_SERVER['HTTP_X_CAL_SIGNATURE_256'] ?? '';
+    $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+    
+    if (!hash_equals($expectedSignature, $signature)) {
+      error_log("Cal.com webhook: Invalid signature");
+      respond(['error' => 'Invalid signature'], 401);
+    }
+  }
+  
   $triggerEvent = $data['triggerEvent'] ?? '';
   $payload = $data['payload'] ?? [];
   
@@ -5365,6 +5382,11 @@ if (isset($_GET['background'])) {
         <div class="card" style="margin-top: 16px;">
           <h3>📅 Cal.com Integration</h3>
           <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Configure your Cal.com webhook to automatically sync bookings to your CRM calendar.</p>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+            <input type="password" id="calWebhookSecret" placeholder="Enter Cal.com webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn" onclick="saveCalSecret()">Save</button>
+            <button class="btn secondary" onclick="toggleCalSecretVisibility()">👁️ Show</button>
+          </div>
           <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=cal.webhook</code></p>
           <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Trigger: <strong>Booking created</strong></p>
         </div>
@@ -5411,6 +5433,25 @@ if (isset($_GET['background'])) {
     
     function toggleRetellApiKeyVisibility() {
       const input = document.getElementById('retellApiKey');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+    
+    async function saveCalSecret() {
+      const value = document.getElementById('calWebhookSecret').value;
+      if (!value.trim()) {
+        alert('Please enter a webhook secret');
+        return;
+      }
+      await api('settings.set', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'cal_webhook_secret', value })
+      });
+      alert('Cal.com webhook secret saved');
+      document.getElementById('calWebhookSecret').value = '';
+    }
+    
+    function toggleCalSecretVisibility() {
+      const input = document.getElementById('calWebhookSecret');
       input.type = input.type === 'password' ? 'text' : 'password';
     }
     
