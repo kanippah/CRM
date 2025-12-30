@@ -1831,6 +1831,7 @@ function api_retell_calls_list() {
   $offset = ($page - 1) * $limit;
   $status = $_GET['status'] ?? '';
   $direction = $_GET['direction'] ?? '';
+  $date = $_GET['date'] ?? '';
   $q = $_GET['q'] ?? '';
   
   $where_parts = [];
@@ -1845,15 +1846,26 @@ function api_retell_calls_list() {
     $where_parts[] = "rc.direction = :direction";
     $params[':direction'] = $direction;
   }
+
+  if ($date) {
+    $where_parts[] = "CAST(rc.created_at AS DATE) = :date";
+    $params[':date'] = $date;
+  }
   
   if ($q) {
-    $where_parts[] = "(rc.from_number ILIKE :q OR rc.to_number ILIKE :q OR rc.transcript ILIKE :q)";
+    $where_parts[] = "(rc.from_number ILIKE :q OR rc.to_number ILIKE :q OR rc.transcript ILIKE :q OR l.name ILIKE :q OR c.name ILIKE :q)";
     $params[':q'] = "%$q%";
   }
   
   $where_sql = count($where_parts) > 0 ? 'WHERE ' . implode(' AND ', $where_parts) : '';
   
-  $count = $pdo->prepare("SELECT COUNT(*) FROM retell_calls rc $where_sql");
+  $count = $pdo->prepare("
+    SELECT COUNT(*) 
+    FROM retell_calls rc 
+    LEFT JOIN leads l ON rc.lead_id = l.id
+    LEFT JOIN contacts c ON rc.contact_id = c.id
+    $where_sql
+  ");
   $count->execute($params);
   $total = $count->fetchColumn();
   
@@ -3338,6 +3350,7 @@ if (isset($_GET['background'])) {
     let aiCallsPage = 1;
     let aiCallsDirection = '';
     let aiCallsSearch = '';
+    let aiCallsDate = '';
     
     async function renderAICalls() {
       document.getElementById('view-ai-calls').innerHTML = `
@@ -3351,12 +3364,13 @@ if (isset($_GET['background'])) {
               <option value="inbound" ${aiCallsDirection === 'inbound' ? 'selected' : ''}>Inbound</option>
               <option value="outbound" ${aiCallsDirection === 'outbound' ? 'selected' : ''}>Outbound</option>
             </select>
-            <input type="text" class="search" id="aiCallsSearch" placeholder="Search calls..." value="${aiCallsSearch}" oninput="filterAICalls()" style="flex: 1; min-width: 200px;">
+            <input type="date" id="aiCallsDate" onchange="filterAICalls()" value="${aiCallsDate}" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <input type="text" class="search" id="aiCallsSearch" placeholder="Search by name, number or transcript..." value="${aiCallsSearch}" oninput="filterAICalls()" style="flex: 1; min-width: 200px;">
           </div>
         </div>
         <div class="card">
           <div id="aiCallsPagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;"></div>
-          <div id="aiCallsList"></div>
+          <div id="aiCallsList" style="overflow-x: auto;"></div>
         </div>
       `;
       loadAICalls();
@@ -3365,6 +3379,7 @@ if (isset($_GET['background'])) {
     async function filterAICalls() {
       aiCallsDirection = document.getElementById('aiCallsDirection')?.value || '';
       aiCallsSearch = document.getElementById('aiCallsSearch')?.value || '';
+      aiCallsDate = document.getElementById('aiCallsDate')?.value || '';
       aiCallsPage = 1;
       loadAICalls();
     }
@@ -3374,7 +3389,8 @@ if (isset($_GET['background'])) {
         page: aiCallsPage,
         limit: 20,
         direction: aiCallsDirection,
-        q: aiCallsSearch
+        q: aiCallsSearch,
+        date: aiCallsDate
       });
       
       const data = await api('retell_calls.list&' + params.toString());
@@ -3392,40 +3408,57 @@ if (isset($_GET['background'])) {
         document.getElementById('aiCallsList').innerHTML = `
           <div style="text-align: center; padding: 40px; color: var(--muted);">
             <p style="font-size: 48px; margin-bottom: 20px;">🤖</p>
-            <p>No AI calls yet.</p>
-            <p style="font-size: 12px; margin-top: 10px;">Calls from your Retell AI voice agent will appear here.</p>
+            <p>No AI calls found.</p>
           </div>
         `;
         return;
       }
       
-      const callsHtml = data.items.map(call => {
+      let table = `
+        <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--border);">
+              <th style="padding: 12px; text-align: left;">Date & Time</th>
+              <th style="padding: 12px; text-align: left;">Direction</th>
+              <th style="padding: 12px; text-align: left;">Name</th>
+              <th style="padding: 12px; text-align: left;">Phone Number</th>
+              <th style="padding: 12px; text-align: left;">Duration</th>
+              <th style="padding: 12px; text-align: left;">Score</th>
+              <th style="padding: 12px; text-align: left;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      table += data.items.map(call => {
         const startDate = call.start_timestamp ? new Date(call.start_timestamp).toLocaleString() : '-';
         const duration = call.duration_seconds ? formatDuration(call.duration_seconds) : '-';
-        const callerName = call.lead_name || call.contact_name || 'Unknown';
+        const callerName = call.lead_name || call.contact_name || '<span style="color: var(--muted);">Unknown</span>';
         const callerNumber = call.direction === 'inbound' ? call.from_number : call.to_number;
-        const directionIcon = call.direction === 'inbound' ? '📥' : '📤';
-        const scoreDisplay = call.call_score ? `<span class="badge" style="background: ${call.call_score >= 7 ? '#22c55e' : call.call_score >= 4 ? '#f59e0b' : '#ef4444'}; color: white;">${call.call_score}/10</span>` : '';
+        const directionIcon = call.direction === 'inbound' ? '📥 Inbound' : '📤 Outbound';
+        const scoreDisplay = call.call_score ? `<span class="badge" style="background: ${call.call_score >= 7 ? '#22c55e' : call.call_score >= 4 ? '#f59e0b' : '#ef4444'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${call.call_score}/10</span>` : '-';
         
         return `
-          <div class="call-card" onclick="viewAICall(${call.id})" style="border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-              <div>
-                <div style="font-weight: bold; font-size: 16px;">${directionIcon} ${callerNumber || 'Unknown'}</div>
-                <div style="color: var(--muted); font-size: 12px;">${callerName}</div>
-              </div>
-              <div style="text-align: right;">
-                <div style="font-size: 12px; color: var(--muted);">${startDate}</div>
-                <div style="font-size: 14px;">Duration: ${duration}</div>
-                ${scoreDisplay}
-              </div>
-            </div>
-            ${call.call_summary ? `<div style="margin-top: 10px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px;">${call.call_summary.substring(0, 150)}${call.call_summary.length > 150 ? '...' : ''}</div>` : ''}
-          </div>
+          <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+            <td style="padding: 12px; font-size: 13px;">${startDate}</td>
+            <td style="padding: 12px; font-size: 13px;">${directionIcon}</td>
+            <td style="padding: 12px; font-size: 13px; font-weight: 500;">${callerName}</td>
+            <td style="padding: 12px; font-size: 13px; font-family: monospace;">${callerNumber || '-'}</td>
+            <td style="padding: 12px; font-size: 13px;">${duration}</td>
+            <td style="padding: 12px;">${scoreDisplay}</td>
+            <td style="padding: 12px;">
+              <button class="btn secondary" onclick="viewAICall(${call.id})" style="padding: 4px 10px; font-size: 12px;">View Details</button>
+            </td>
+          </tr>
         `;
       }).join('');
       
-      document.getElementById('aiCallsList').innerHTML = callsHtml;
+      table += `
+          </tbody>
+        </table>
+      `;
+      
+      document.getElementById('aiCallsList').innerHTML = table;
     }
     
     function formatDuration(seconds) {
