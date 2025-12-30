@@ -467,6 +467,7 @@ if (isset($_GET['api'])) {
       case 'calendar.list': api_calendar_list(); break;
       case 'calendar.save': api_calendar_save(); break;
       case 'calendar.delete': api_calendar_delete(); break;
+      case 'cal.webhook': api_cal_webhook(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -2067,6 +2068,63 @@ function api_calendar_delete() {
   }
   
   $pdo->prepare("DELETE FROM calendar_events WHERE id = :id")->execute([':id' => $id]);
+  respond(['ok' => true]);
+}
+
+// Cal.com Webhook Handler
+function api_cal_webhook() {
+  $rawPayload = file_get_contents('php://input');
+  $data = json_decode($rawPayload, true);
+  
+  if (!$data) {
+    respond(['error' => 'Invalid JSON payload'], 400);
+  }
+  
+  $triggerEvent = $data['triggerEvent'] ?? '';
+  $payload = $data['payload'] ?? [];
+  
+  if ($triggerEvent === 'BOOKING_CREATED') {
+    $pdo = db();
+    
+    $startTime = $payload['startTime'] ?? '';
+    $endTime = $payload['endTime'] ?? '';
+    $title = "Cal.com: " . ($payload['attendees'][0]['name'] ?? 'New Booking');
+    $description = "Booking from Cal.com\nUser: " . ($payload['attendees'][0]['email'] ?? 'N/A');
+    
+    // Try to find matching lead/contact by email
+    $email = $payload['attendees'][0]['email'] ?? '';
+    $leadId = null;
+    $contactId = null;
+    
+    if ($email) {
+      $stmt = $pdo->prepare("SELECT id FROM leads WHERE email = :email LIMIT 1");
+      $stmt->execute([':email' => $email]);
+      $lead = $stmt->fetch();
+      if ($lead) $leadId = $lead['id'];
+      
+      $stmt = $pdo->prepare("SELECT id FROM contacts WHERE email = :email LIMIT 1");
+      $stmt->execute([':email' => $email]);
+      $contact = $stmt->fetch();
+      if ($contact) $contactId = $contact['id'];
+    }
+    
+    $stmt = $pdo->prepare("
+      INSERT INTO calendar_events 
+        (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color)
+      VALUES 
+        (:title, :description, 'booking', :start_time, :end_time, 'confirmed', :lead_id, :contact_id, '#0066CC')
+    ");
+    
+    $stmt->execute([
+      ':title' => $title,
+      ':description' => $description,
+      ':start_time' => $startTime,
+      ':end_time' => $endTime,
+      ':lead_id' => $leadId,
+      ':contact_id' => $contactId
+    ]);
+  }
+  
   respond(['ok' => true]);
 }
 

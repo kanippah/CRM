@@ -94,11 +94,20 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - `calendar.save` - Create/update calendar events
 - `calendar.delete` - Delete calendar events
 
-### Webhook Setup Instructions
-1. In Retell AI dashboard, go to Agent Settings → Webhook
-2. Set webhook URL to: `https://your-domain.com/?api=retell.webhook`
-3. Configure post-call analysis fields in Retell (call_summary, improvement_recommendations, call_score)
-4. Retell will send `call_analyzed` events automatically after each call
+### Cal.com Integration
+**Purpose:** Receive and display bookings made via Cal.com.
+**Implementation:**
+- **Webhook Endpoint:** `?api=cal.webhook` receives POST data from Cal.com when a booking is created.
+- **Data Captured:** Event title, description (attendee email), start time, end time.
+- **Automatic Matching:** Incoming bookings are automatically matched to existing leads/contacts by email.
+- **Calendar Integration:** Each Cal.com booking automatically creates a 'booking' type event in the calendar (displayed in blue).
+
+### Webhook Setup Instructions (Cal.com)
+1. In your Cal.com dashboard, go to Settings → Webhooks.
+2. Click "Add new webhook".
+3. Set the Payload URL to: `https://your-domain.com/?api=cal.webhook`.
+4. Select "Booking created" as the event trigger.
+5. Save the webhook.
 
 ## External Dependencies
 - **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). All timestamp comparisons use explicit UTC timezone to prevent expiration mismatches.
