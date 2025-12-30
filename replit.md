@@ -60,6 +60,7 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 **Purpose:** Receive and display post-call analysis from Retell AI voice agents.
 **Implementation:**
 - **Webhook Endpoint:** `?api=retell.webhook` receives POST data from Retell AI after each call
+- **Security:** HMAC SHA-256 signature verification using `x-retell-signature` header. Webhook secret configurable in Settings (Admin only). Requests with invalid signatures are rejected with 401.
 - **Data Captured:** call_id, agent_id, direction (inbound/outbound), caller phone, duration, transcript, analysis results, call summary, improvement recommendations, call score
 - **Automatic Matching:** Incoming calls are automatically matched to existing leads/contacts by phone number
 - **Calendar Integration:** Each AI call automatically creates a calendar event
