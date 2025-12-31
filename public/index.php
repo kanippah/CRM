@@ -2160,14 +2160,35 @@ function api_cal_webhook() {
     $location = $payload['location'] ?? '';
     $notes = $payload['additionalNotes'] ?? '';
     $descriptionText = $payload['description'] ?? '';
+    $bookingUid = $payload['uid'] ?? '';
+    $videoUrl = $payload['metadata']['videoCallUrl'] ?? '';
+    $organizerEmail = $organizer['email'] ?? '';
     
     $description = "Event: " . $eventTitle . "\n";
     $description .= "Attendee: " . $attendeeName . " (" . $attendeeEmail . ")\n";
     $description .= "Timezone: " . $attendeeTimezone . "\n";
+    if ($organizerEmail) $description .= "Organizer: " . $organizerName . " (" . $organizerEmail . ")\n";
+    else $description .= "Organizer: " . $organizerName . "\n";
+    
     if ($location) $description .= "Location: " . $location . "\n";
-    if ($descriptionText) $description .= "Description: " . $descriptionText . "\n";
-    if ($notes) $description .= "Notes: " . $notes . "\n";
-    $description .= "Organizer: " . $organizerName;
+    if ($videoUrl) $description .= "Meeting Link: " . $videoUrl . "\n";
+    if ($bookingUid) $description .= "Booking Ref: " . $bookingUid . "\n";
+    
+    // Process custom responses
+    if (!empty($payload['responses'])) {
+      $description .= "\n--- Booking Responses ---\n";
+      foreach ($payload['responses'] as $key => $resp) {
+        $label = $resp['label'] ?? $key;
+        $value = $resp['value'] ?? 'N/A';
+        if (is_array($value)) {
+          $value = $value['value'] ?? json_encode($value);
+        }
+        $description .= $label . ": " . $value . "\n";
+      }
+    }
+    
+    if ($descriptionText) $description .= "\nDescription: " . $descriptionText . "\n";
+    if ($notes) $description .= "\nNotes: " . $notes . "\n";
     
     // Try to find matching lead/contact by email
     $email = $attendeeEmail;
@@ -4013,52 +4034,93 @@ if (isset($_GET['background'])) {
         return;
       }
       
-      const startTime = event.start_time ? new Date(event.start_time).toLocaleString() : '-';
-      const endTime = event.end_time ? new Date(event.end_time).toLocaleString() : '-';
+      const startTime = event.start_time ? new Date(event.start_time).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }) : '-';
+      const endTime = event.end_time ? new Date(event.end_time).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }) : '-';
       const typeColors = { call: '#FF8C42', booking: '#0066CC', schedule: '#22c55e', meeting: '#8b5cf6' };
       const color = event.color || typeColors[event.event_type] || '#6b7280';
       
+      // Parse description for better display
+      let descriptionHtml = '';
+      if (event.description) {
+        const lines = event.description.split('\n');
+        descriptionHtml = lines.map(line => {
+          if (line.startsWith('---') && line.endsWith('---')) {
+            return `<div style="font-weight: bold; border-bottom: 1px solid var(--border); margin: 15px 0 10px; padding-bottom: 5px; color: var(--kt-blue); text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;">${line.replace(/-/g, '').trim()}</div>`;
+          }
+          
+          const parts = line.split(': ');
+          if (parts.length > 1) {
+            const label = parts[0];
+            const value = parts.slice(1).join(': ');
+            
+            if (value.startsWith('http')) {
+              return `<div style="margin-bottom: 10px;"><span style="color: var(--muted); font-size: 12px; font-weight: bold; text-transform: uppercase;">${label}</span><br><a href="${value}" target="_blank" class="btn" style="display: inline-block; margin-top: 5px; font-size: 13px; padding: 8px 16px; background: var(--kt-orange); color: white; border: none; border-radius: 6px; text-decoration: none;">Join Meeting ↗</a></div>`;
+            }
+            
+            return `<div style="margin-bottom: 10px;"><span style="color: var(--muted); font-size: 12px; font-weight: bold; text-transform: uppercase;">${label}</span><div style="font-weight: 500; font-size: 14px; margin-top: 2px;">${value}</div></div>`;
+          }
+          
+          return line.trim() ? `<div style="margin-bottom: 8px; line-height: 1.6;">${line}</div>` : '<div style="height: 10px;"></div>';
+        }).join('');
+      }
+      
       showModal(`
-        <h3>${event.title}</h3>
-        <div style="display: inline-block; background: ${color}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 15px; text-transform: uppercase;">${event.event_type}</div>
-        <div class="form-group">
-          <label>Start</label>
-          <div style="font-weight: 500;">${startTime}</div>
+        <div style="border-left: 8px solid ${color}; padding-left: 20px; margin: -10px 0 20px -20px;">
+          <h2 style="margin: 0 0 8px 0; font-size: 22px;">${event.title}</h2>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="background: ${color}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">${event.event_type}</div>
+            ${event.status ? `<div style="background: var(--bg); color: var(--muted); padding: 3px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${event.status}</div>` : ''}
+          </div>
         </div>
-        ${event.end_time ? `
-          <div class="form-group">
-            <label>End</label>
-            <div style="font-weight: 500;">${endTime}</div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; background: var(--bg); padding: 15px; border-radius: 10px; border: 1px solid var(--border);">
+          <div>
+            <label style="display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">Start Date & Time</label>
+            <div style="font-size: 13px; font-weight: 600;">${startTime}</div>
           </div>
-        ` : ''}
+          ${event.end_time ? `
+            <div>
+              <label style="display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">End Date & Time</label>
+              <div style="font-size: 13px; font-weight: 600;">${endTime}</div>
+            </div>
+          ` : ''}
+        </div>
+
         ${event.location ? `
-          <div class="form-group">
-            <label>Location</label>
-            <div style="font-weight: 500;">📍 ${event.location}</div>
+          <div style="margin-bottom: 20px; padding: 15px; background: #e6f0ff; border-radius: 10px; border: 1px solid #b3d1ff; color: #004085;">
+            <label style="display: block; font-size: 10px; text-transform: uppercase; font-weight: bold; margin-bottom: 4px; opacity: 0.7;">Location / Meeting Point</label>
+            <div style="font-size: 15px; font-weight: 600;">📍 ${event.location}</div>
           </div>
         ` : ''}
-        ${event.description ? `
-          <div class="form-group">
-            <label>Description / Details</label>
-            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 14px; line-height: 1.5;">${event.description}</div>
+
+        ${descriptionHtml ? `
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Booking Summary & Information</label>
+            <div style="background: var(--panel); padding: 15px; border-radius: 10px; border: 1px solid var(--border); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); max-height: 350px; overflow-y: auto;">
+              ${descriptionHtml}
+            </div>
           </div>
         ` : ''}
-        ${event.lead_name ? `
-          <div class="form-group">
-            <label>Related Lead</label>
-            <div>${event.lead_name}</div>
-          </div>
-        ` : ''}
-        ${event.from_number || event.to_number ? `
-          <div class="form-group">
-            <label>Call Details</label>
-            <div>${event.direction === 'inbound' ? 'From: ' + event.from_number : 'To: ' + event.to_number}</div>
-          </div>
-        ` : ''}
-        <div style="display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap;">
-          ${event.event_type !== 'call' ? `<button type="button" class="btn" onclick="closeModal(); openEventForm(${id})">Edit</button>` : ''}
-          ${event.event_type !== 'call' ? `<button type="button" class="btn danger" onclick="deleteEvent(${id})">Delete</button>` : ''}
-          <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 25px;">
+          ${event.lead_name ? `
+            <div style="padding: 10px; background: var(--bg); border-radius: 8px; border: 1px dashed var(--border);">
+              <label style="display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Linked Lead</label>
+              <div style="font-weight: 600; font-size: 12px;">👤 ${event.lead_name}</div>
+            </div>
+          ` : ''}
+          ${event.contact_name ? `
+            <div style="padding: 10px; background: var(--bg); border-radius: 8px; border: 1px dashed var(--border);">
+              <label style="display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; margin-bottom: 3px;">Linked Contact</label>
+              <div style="font-weight: 600; font-size: 12px;">👤 ${event.contact_name}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 25px; border-top: 1px solid var(--border); padding-top: 15px;">
+          ${event.event_type !== 'call' ? `<button type="button" class="btn" style="flex: 1; font-size: 12px;" onclick="closeModal(); openEventForm(${id})">Edit</button>` : ''}
+          ${event.event_type !== 'call' ? `<button type="button" class="btn danger" style="flex: 1; font-size: 12px;" onclick="deleteEvent(${id})">Delete</button>` : ''}
+          <button type="button" class="btn secondary" style="flex: 1; font-size: 12px;" onclick="closeModal()">Close</button>
         </div>
       `);
     }
