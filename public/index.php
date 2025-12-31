@@ -3804,7 +3804,7 @@ if (isset($_GET['background'])) {
                   <span>🕒 ${time}${endTime}</span>
                   ${e.location ? `<span>📍 ${e.location}</span>` : ''}
                 </div>
-                <div style="margin-top: 10px; font-size: 13px; color: var(--text); max-width: 500px; white-space: pre-wrap;">${e.description ? e.description.substring(0, 150) + (e.description.length > 150 ? '...' : '') : ''}</div>
+                <div style="margin-top: 10px; font-size: 13px; color: var(--text); max-width: 600px; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${e.description || ''}</div>
               </div>
               <div style="background: ${color}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase;">${e.event_type}</div>
             </div>
@@ -4023,24 +4023,24 @@ if (isset($_GET['background'])) {
         <div style="display: inline-block; background: ${color}; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 15px; text-transform: uppercase;">${event.event_type}</div>
         <div class="form-group">
           <label>Start</label>
-          <div>${startTime}</div>
+          <div style="font-weight: 500;">${startTime}</div>
         </div>
         ${event.end_time ? `
           <div class="form-group">
             <label>End</label>
-            <div>${endTime}</div>
+            <div style="font-weight: 500;">${endTime}</div>
           </div>
         ` : ''}
         ${event.location ? `
           <div class="form-group">
             <label>Location</label>
-            <div>${event.location}</div>
+            <div style="font-weight: 500;">📍 ${event.location}</div>
           </div>
         ` : ''}
         ${event.description ? `
           <div class="form-group">
-            <label>Description</label>
-            <div>${event.description}</div>
+            <label>Description / Details</label>
+            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); white-space: pre-wrap; font-size: 14px; line-height: 1.5;">${event.description}</div>
           </div>
         ` : ''}
         ${event.lead_name ? `
