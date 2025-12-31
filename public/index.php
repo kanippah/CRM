@@ -455,6 +455,7 @@ if (isset($_GET['api'])) {
       
       case 'settings.get': api_settings_get(); break;
       case 'settings.set': api_settings_set(); break;
+      case 'settings.exists': api_settings_exists(); break;
       
       case 'export': api_export(); break;
       case 'import': api_import(); break;
@@ -1565,6 +1566,16 @@ function api_settings_set() {
   $v = $b['value'] ?? '';
   $p->prepare("INSERT INTO settings(key,value) VALUES (:k,:v) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value")->execute([':k' => $k, ':v' => $v]);
   respond(['ok' => true]);
+}
+
+function api_settings_exists() {
+  require_auth();
+  $p = db();
+  $k = $_GET['key'] ?? '';
+  $s = $p->prepare("SELECT COUNT(*) FROM settings WHERE key=:k AND value IS NOT NULL AND value != ''");
+  $s->execute([':k' => $k]);
+  $exists = (int)$s->fetchColumn() > 0;
+  respond(['key' => $k, 'exists' => $exists]);
 }
 
 function api_export() {
@@ -5414,7 +5425,12 @@ if (isset($_GET['background'])) {
     async function renderSettings() {
       await loadCountries();
       const defaultCountry = await api('settings.get&key=defaultCountry');
+      const retellApiKeyCheck = await api('settings.exists&key=retell_api_key');
+      const calWebhookSecretCheck = await api('settings.exists&key=cal_webhook_secret');
       const isAdmin = currentUser.role === 'admin';
+      
+      const hasRetellKey = retellApiKeyCheck.exists === true;
+      const hasCalSecret = calWebhookSecretCheck.exists === true;
       
       document.getElementById('view-settings').innerHTML = `
         <div class="card">
@@ -5431,9 +5447,10 @@ if (isset($_GET['background'])) {
           <h3>🤖 Retell AI Integration</h3>
           <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Enter your Retell API Key to secure incoming webhook calls. Retell uses this key to sign webhook requests.</p>
           <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <input type="password" id="retellApiKey" placeholder="Enter your Retell API Key..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <input type="password" id="retellApiKey" placeholder="${hasRetellKey ? '••••••••••••••••' : 'Enter your Retell API Key...'}" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn secondary" id="retellApiKeyToggle" onclick="toggleRetellApiKeyVisibility()">👁️</button>
             <button class="btn" onclick="saveRetellApiKey()">Save</button>
-            <button class="btn secondary" onclick="toggleRetellApiKeyVisibility()">👁️ Show</button>
+            ${hasRetellKey ? '<span style="color: var(--success); font-size: 12px;">✓ Configured</span>' : ''}
           </div>
           <p style="color: var(--muted); margin-top: 12px; font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=retell.webhook</code></p>
         </div>
@@ -5441,9 +5458,11 @@ if (isset($_GET['background'])) {
           <h3>📅 Cal.com Integration</h3>
           <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Configure your Cal.com webhook to automatically sync bookings to your CRM calendar.</p>
           <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-            <input type="password" id="calWebhookSecret" placeholder="Enter Cal.com webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <input type="password" id="calWebhookSecret" placeholder="${hasCalSecret ? '••••••••••••••••' : 'Enter or generate a webhook secret...'}" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn secondary" id="calSecretToggle" onclick="toggleCalSecretVisibility()">👁️</button>
+            <button class="btn" onclick="generateCalSecret()">🔄 Generate</button>
             <button class="btn" onclick="saveCalSecret()">Save</button>
-            <button class="btn secondary" onclick="toggleCalSecretVisibility()">👁️ Show</button>
+            ${hasCalSecret ? '<span style="color: var(--success); font-size: 12px;">✓ Configured</span>' : ''}
           </div>
           <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=cal.webhook</code></p>
           <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Trigger: <strong>Booking created</strong></p>
@@ -5486,31 +5505,65 @@ if (isset($_GET['background'])) {
         body: JSON.stringify({ key: 'retell_api_key', value })
       });
       alert('Retell API Key saved');
-      document.getElementById('retellApiKey').value = '';
+      await renderSettings();
     }
     
     function toggleRetellApiKeyVisibility() {
       const input = document.getElementById('retellApiKey');
-      input.type = input.type === 'password' ? 'text' : 'password';
+      const btn = document.getElementById('retellApiKeyToggle');
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+        btn.title = 'Hide';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+        btn.title = 'Show';
+      }
+    }
+    
+    function generateCalSecret() {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const randomValues = new Uint32Array(32);
+      crypto.getRandomValues(randomValues);
+      let secret = 'whsec_';
+      for (let i = 0; i < 32; i++) {
+        secret += chars.charAt(randomValues[i] % chars.length);
+      }
+      const input = document.getElementById('calWebhookSecret');
+      input.value = secret;
+      input.type = 'text';
+      const btn = document.getElementById('calSecretToggle');
+      btn.textContent = '🙈';
+      btn.title = 'Hide';
     }
     
     async function saveCalSecret() {
       const value = document.getElementById('calWebhookSecret').value;
       if (!value.trim()) {
-        alert('Please enter a webhook secret');
+        alert('Please enter or generate a webhook secret');
         return;
       }
       await api('settings.set', {
         method: 'POST',
         body: JSON.stringify({ key: 'cal_webhook_secret', value })
       });
-      alert('Cal.com webhook secret saved');
-      document.getElementById('calWebhookSecret').value = '';
+      alert('Cal.com webhook secret saved. Copy this secret and add it to your Cal.com webhook settings.');
+      await renderSettings();
     }
     
     function toggleCalSecretVisibility() {
       const input = document.getElementById('calWebhookSecret');
-      input.type = input.type === 'password' ? 'text' : 'password';
+      const btn = document.getElementById('calSecretToggle');
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+        btn.title = 'Hide';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+        btn.title = 'Show';
+      }
     }
     
     async function exportData() {
