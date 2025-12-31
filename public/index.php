@@ -2160,6 +2160,7 @@ function api_cal_webhook() {
     $location = $payload['location'] ?? '';
     $notes = $payload['additionalNotes'] ?? '';
     $descriptionText = $payload['description'] ?? '';
+    
     $description = "Event: " . $eventTitle . "\n";
     $description .= "Attendee: " . $attendeeName . " (" . $attendeeEmail . ")\n";
     $description .= "Timezone: " . $attendeeTimezone . "\n";
@@ -3641,7 +3642,16 @@ if (isset($_GET['background'])) {
       
       let viewTitle = `${monthNames[calendarMonth]} ${calendarYear}`;
       if (calendarView === 'day') {
-        viewTitle = `${monthNames[calendarMonth]} ${calendarDay}, ${calendarYear}`;
+        const date = new Date(calendarYear, calendarMonth, calendarDay);
+        viewTitle = date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      } else if (calendarView === 'week') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay);
+        const dayOfWeek = date.getDay();
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        viewTitle = `${monthNames[startOfWeek.getMonth()]} ${startOfWeek.getDate()} - ${monthNames[endOfWeek.getMonth()]} ${endOfWeek.getDate()}, ${calendarYear}`;
       }
       
       document.getElementById('view-calendar').innerHTML = `
@@ -3653,7 +3663,7 @@ if (isset($_GET['background'])) {
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; gap: 10px; align-items: center;">
               <button class="btn" onclick="prevPeriod()">◀</button>
-              <span style="font-size: 18px; font-weight: bold; min-width: 180px; text-align: center;">
+              <span style="font-size: 18px; font-weight: bold; min-width: 250px; text-align: center;">
                 ${viewTitle}
               </span>
               <button class="btn" onclick="nextPeriod()">▶</button>
@@ -3688,6 +3698,7 @@ if (isset($_GET['background'])) {
           calendarMonth = 11;
           calendarYear--;
         }
+        calendarDay = 1;
       }
       renderCalendar();
     }
@@ -3709,6 +3720,7 @@ if (isset($_GET['background'])) {
           calendarMonth = 0;
           calendarYear++;
         }
+        calendarDay = 1;
       }
       renderCalendar();
     }
@@ -3762,37 +3774,46 @@ if (isset($_GET['background'])) {
     }
     
     function renderDayView(events) {
+      const today = new Date();
+      const currentDate = new Date(calendarYear, calendarMonth, calendarDay);
       const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(calendarDay).padStart(2, '0')}`;
       const dayEvents = events.filter(e => e.start_time && e.start_time.startsWith(dateStr));
       
-      let grid = `
-        <div style="padding: 20px;">
-          <h3 style="margin-bottom: 20px;">Events for ${dateStr}</h3>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
-      `;
+      let grid = `<div style="padding: 20px;">`;
       
       if (dayEvents.length === 0) {
-        grid += `<div style="text-align: center; color: var(--muted); padding: 40px;">No events scheduled for this day</div>`;
+        grid += `
+          <div style="text-align: center; color: var(--muted); padding: 40px; background: var(--bg); border-radius: 8px; border: 1px dashed var(--border);">
+            <div style="font-size: 48px; margin-bottom: 10px;">📅</div>
+            <h3>No events scheduled for this day</h3>
+            <button class="btn" style="margin-top: 15px;" onclick="openEventForm(null, '${dateStr}')">+ Add Event</button>
+          </div>
+        `;
       } else {
         dayEvents.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-        grid += dayEvents.map(e => {
+        grid += `<div style="display: flex; flex-direction: column; gap: 15px;">`;
+        dayEvents.forEach(e => {
           const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
           const time = new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const endTime = e.end_time ? ' - ' + new Date(e.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-          return `
-            <div onclick="viewEvent(${e.id})" style="background: var(--panel); border-left: 5px solid ${color}; padding: 15px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+          grid += `
+            <div onclick="viewEvent(${e.id})" style="background: var(--panel); border-left: 5px solid ${color}; padding: 20px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
               <div>
-                <div style="font-weight: bold; font-size: 16px;">${e.title}</div>
-                <div style="color: var(--muted); font-size: 13px;">${time}${endTime}</div>
-                ${e.location ? `<div style="font-size: 12px; margin-top: 5px;">📍 ${e.location}</div>` : ''}
+                <div style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">${e.title}</div>
+                <div style="color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 10px;">
+                  <span>🕒 ${time}${endTime}</span>
+                  ${e.location ? `<span>📍 ${e.location}</span>` : ''}
+                </div>
+                <div style="margin-top: 10px; font-size: 13px; color: var(--text); max-width: 500px; white-space: pre-wrap;">${e.description ? e.description.substring(0, 150) + (e.description.length > 150 ? '...' : '') : ''}</div>
               </div>
-              <div style="background: ${color}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px; text-transform: uppercase;">${e.event_type}</div>
+              <div style="background: ${color}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase;">${e.event_type}</div>
             </div>
           `;
-        }).join('');
+        });
+        grid += `</div>`;
       }
       
-      grid += '</div></div>';
+      grid += `</div>`;
       document.getElementById('calendarGrid').innerHTML = grid;
     }
     
@@ -3807,17 +3828,17 @@ if (isset($_GET['background'])) {
       
       let grid = `
         <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);">
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Sun</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Mon</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Tue</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Wed</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Thu</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Fri</div>
-          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold;">Sat</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">SUN</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">MON</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">TUE</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">WED</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">THU</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">FRI</div>
+          <div style="background: var(--panel); padding: 10px; text-align: center; font-weight: bold; font-size: 12px; color: var(--muted);">SAT</div>
       `;
       
       for (let i = 0; i < startPadding; i++) {
-        grid += `<div style="background: var(--bg); min-height: 80px; padding: 5px;"></div>`;
+        grid += `<div style="background: var(--bg); min-height: 100px; padding: 5px;"></div>`;
       }
       
       for (let day = 1; day <= totalDays; day++) {
@@ -3827,14 +3848,14 @@ if (isset($_GET['background'])) {
         
         const eventDots = dayEvents.slice(0, 3).map(e => {
           const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
-          return `<div onclick="event.stopPropagation(); viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.title.substring(0, 15)}</div>`;
+          return `<div onclick="event.stopPropagation(); viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${e.title}</div>`;
         }).join('');
         
-        const moreEvents = dayEvents.length > 3 ? `<div style="font-size: 10px; color: var(--muted);">+${dayEvents.length - 3} more</div>` : '';
+        const moreEvents = dayEvents.length > 3 ? `<div style="font-size: 10px; color: var(--muted); text-align: center;">+${dayEvents.length - 3} more</div>` : '';
         
         grid += `
-          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 80px; padding: 5px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
-            <div style="font-weight: ${isToday ? 'bold' : 'normal'}; color: ${isToday ? 'var(--kt-orange)' : 'inherit'}; margin-bottom: 5px;">${day}</div>
+          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 100px; padding: 8px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange); position: relative; z-index: 1;' : ''}">
+            <div style="font-weight: ${isToday ? 'bold' : 'normal'}; color: ${isToday ? 'var(--kt-orange)' : 'inherit'}; margin-bottom: 8px; font-size: 14px;">${day}</div>
             ${eventDots}
             ${moreEvents}
           </div>
@@ -3843,24 +3864,24 @@ if (isset($_GET['background'])) {
       
       const remaining = (7 - ((startPadding + totalDays) % 7)) % 7;
       for (let i = 0; i < remaining; i++) {
-        grid += `<div style="background: var(--bg); min-height: 80px; padding: 5px;"></div>`;
+        grid += `<div style="background: var(--bg); min-height: 100px; padding: 5px;"></div>`;
       }
       
       grid += '</div>';
       
       grid += `
-        <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: center; gap: 5px;">
-            <div style="width: 12px; height: 12px; background: #FF8C42; border-radius: 3px;"></div>
-            <span style="font-size: 12px;">AI Calls</span>
+        <div style="margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; background: var(--panel); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 14px; height: 14px; background: #FF8C42; border-radius: 4px;"></div>
+            <span style="font-size: 13px; font-weight: 500;">AI Calls</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 5px;">
-            <div style="width: 12px; height: 12px; background: #0066CC; border-radius: 3px;"></div>
-            <span style="font-size: 12px;">Bookings</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 14px; height: 14px; background: #0066CC; border-radius: 4px;"></div>
+            <span style="font-size: 13px; font-weight: 500;">Bookings</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 5px;">
-            <div style="width: 12px; height: 12px; background: #22c55e; border-radius: 3px;"></div>
-            <span style="font-size: 12px;">Schedules</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 14px; height: 14px; background: #22c55e; border-radius: 4px;"></div>
+            <span style="font-size: 13px; font-weight: 500;">Schedules</span>
           </div>
         </div>
       `;
@@ -3886,20 +3907,20 @@ if (isset($_GET['background'])) {
         const eventList = dayEvents.map(e => {
           const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
           const time = new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          return `<div onclick="viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 11px; padding: 5px; border-radius: 4px; margin-bottom: 5px; cursor: pointer;">
-            <div style="font-weight: bold;">${time}</div>
-            <div>${e.title}</div>
+          return `<div onclick="event.stopPropagation(); viewEvent(${e.id})" style="background: ${color}; color: white; font-size: 11px; padding: 6px; border-radius: 6px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="font-weight: bold; margin-bottom: 2px;">${time}</div>
+            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.title}</div>
           </div>`;
         }).join('');
         
         grid += `
-          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 200px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
-            <div style="padding: 10px; text-align: center; border-bottom: 1px solid var(--border); ${isToday ? 'background: var(--kt-orange); color: white;' : ''}">
-              <div style="font-weight: bold;">${days[i]}</div>
-              <div style="font-size: 20px;">${date.getDate()}</div>
+          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 300px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange); position: relative; z-index: 1;' : ''}">
+            <div style="padding: 12px; text-align: center; border-bottom: 1px solid var(--border); ${isToday ? 'background: var(--kt-orange); color: white;' : ''}">
+              <div style="font-weight: bold; font-size: 12px; text-transform: uppercase; margin-bottom: 4px; opacity: 0.8;">${days[i]}</div>
+              <div style="font-size: 24px; font-weight: 800;">${date.getDate()}</div>
             </div>
-            <div style="padding: 10px; overflow-y: auto; max-height: 300px;">
-              ${eventList || '<div style="color: var(--muted); font-size: 12px; text-align: center;">No events</div>'}
+            <div style="padding: 10px; overflow-y: auto; max-height: 220px;">
+              ${eventList || '<div style="color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px; opacity: 0.5;">No events</div>'}
             </div>
           </div>
         `;
