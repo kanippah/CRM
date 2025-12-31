@@ -1572,10 +1572,11 @@ function api_settings_exists() {
   require_auth();
   $p = db();
   $k = $_GET['key'] ?? '';
-  $s = $p->prepare("SELECT COUNT(*) FROM settings WHERE key=:k AND value IS NOT NULL AND value != ''");
+  $s = $p->prepare("SELECT value FROM settings WHERE key=:k AND value IS NOT NULL AND value != ''");
   $s->execute([':k' => $k]);
-  $exists = (int)$s->fetchColumn() > 0;
-  respond(['key' => $k, 'exists' => $exists]);
+  $val = $s->fetchColumn();
+  $exists = $val !== false && $val !== '';
+  respond(['key' => $k, 'exists' => $exists, 'value' => $exists ? $val : '']);
 }
 
 function api_export() {
@@ -1583,13 +1584,16 @@ function api_export() {
   $p = db();
   $data = [
     'leads' => $p->query("SELECT * FROM leads ORDER BY id")->fetchAll(),
+    'industries' => $p->query("SELECT * FROM industries ORDER BY id")->fetchAll(),
     'contacts' => $p->query("SELECT * FROM contacts ORDER BY id")->fetchAll(),
     'calls' => $p->query("SELECT * FROM calls ORDER BY id")->fetchAll(),
     'projects' => $p->query("SELECT * FROM projects ORDER BY id")->fetchAll(),
     'settings' => $p->query("SELECT * FROM settings ORDER BY key")->fetchAll(),
   ];
-  header('Content-Disposition: attachment; filename="koadi_crm_export.json"');
-  respond($data);
+  header('Content-Type: application/json');
+  header('Content-Disposition: attachment; filename="crm_export_' . date('Y-m-d') . '.json"');
+  echo json_encode($data, JSON_PRETTY_PRINT);
+  exit;
 }
 
 function api_import() {
@@ -5431,6 +5435,8 @@ if (isset($_GET['background'])) {
       
       const hasRetellKey = retellApiKeyCheck.exists === true;
       const hasCalSecret = calWebhookSecretCheck.exists === true;
+      const retellValue = retellApiKeyCheck.value || '';
+      const calValue = calWebhookSecretCheck.value || '';
       
       document.getElementById('view-settings').innerHTML = `
         <div class="card">
@@ -5447,8 +5453,8 @@ if (isset($_GET['background'])) {
           <h3>🤖 Retell AI Integration</h3>
           <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Enter your Retell API Key to secure incoming webhook calls. Retell uses this key to sign webhook requests.</p>
           <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <input type="password" id="retellApiKey" placeholder="${hasRetellKey ? '••••••••••••••••' : 'Enter your Retell API Key...'}" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-            <button class="btn secondary" id="retellApiKeyToggle" onclick="toggleRetellApiKeyVisibility()">👁️</button>
+            <input type="password" id="retellApiKey" value="${retellValue}" placeholder="Enter your Retell API Key..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn secondary" id="retellApiKeyToggle" onclick="toggleRetellApiKeyVisibility()">👁️ Show</button>
             <button class="btn" onclick="saveRetellApiKey()">Save</button>
             ${hasRetellKey ? '<span style="color: var(--success); font-size: 12px;">✓ Configured</span>' : ''}
           </div>
@@ -5458,8 +5464,8 @@ if (isset($_GET['background'])) {
           <h3>📅 Cal.com Integration</h3>
           <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Configure your Cal.com webhook to automatically sync bookings to your CRM calendar.</p>
           <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-            <input type="password" id="calWebhookSecret" placeholder="${hasCalSecret ? '••••••••••••••••' : 'Enter or generate a webhook secret...'}" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-            <button class="btn secondary" id="calSecretToggle" onclick="toggleCalSecretVisibility()">👁️</button>
+            <input type="password" id="calWebhookSecret" value="${calValue}" placeholder="Enter or generate a webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn secondary" id="calSecretToggle" onclick="toggleCalSecretVisibility()">👁️ Show</button>
             <button class="btn" onclick="generateCalSecret()">🔄 Generate</button>
             <button class="btn" onclick="saveCalSecret()">Save</button>
             ${hasCalSecret ? '<span style="color: var(--success); font-size: 12px;">✓ Configured</span>' : ''}
@@ -5513,11 +5519,11 @@ if (isset($_GET['background'])) {
       const btn = document.getElementById('retellApiKeyToggle');
       if (input.type === 'password') {
         input.type = 'text';
-        btn.textContent = '🙈';
+        btn.textContent = '🙈 Hide';
         btn.title = 'Hide';
       } else {
         input.type = 'password';
-        btn.textContent = '👁️';
+        btn.textContent = '👁️ Show';
         btn.title = 'Show';
       }
     }
@@ -5534,7 +5540,7 @@ if (isset($_GET['background'])) {
       input.value = secret;
       input.type = 'text';
       const btn = document.getElementById('calSecretToggle');
-      btn.textContent = '🙈';
+      btn.textContent = '🙈 Hide';
       btn.title = 'Hide';
     }
     
@@ -5557,11 +5563,11 @@ if (isset($_GET['background'])) {
       const btn = document.getElementById('calSecretToggle');
       if (input.type === 'password') {
         input.type = 'text';
-        btn.textContent = '🙈';
+        btn.textContent = '🙈 Hide';
         btn.title = 'Hide';
       } else {
         input.type = 'password';
-        btn.textContent = '👁️';
+        btn.textContent = '👁️ Show';
         btn.title = 'Show';
       }
     }
