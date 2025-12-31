@@ -2144,17 +2144,36 @@ function api_cal_webhook() {
   if ($triggerEvent === 'BOOKING_CREATED') {
     $pdo = db();
     
+    $attendee = $payload['attendees'][0] ?? [];
+    $attendeeName = $attendee['name'] ?? 'Guest';
+    $attendeeEmail = $attendee['email'] ?? 'N/A';
+    $attendeeTimezone = $attendee['timeZone'] ?? 'N/A';
+    
+    $organizer = $payload['organizer'] ?? [];
+    $organizerName = $organizer['name'] ?? 'Organizer';
+    
+    $title = "Cal.com: " . $attendeeName;
+    
     $startTime = $payload['startTime'] ?? '';
     $endTime = $payload['endTime'] ?? '';
-    $title = "Cal.com: " . ($payload['attendees'][0]['name'] ?? 'New Booking');
-    $description = "Booking from Cal.com\nUser: " . ($payload['attendees'][0]['email'] ?? 'N/A');
+    $eventTitle = $payload['title'] ?? 'New Booking';
+    $location = $payload['location'] ?? '';
+    $notes = $payload['additionalNotes'] ?? '';
+    $descriptionText = $payload['description'] ?? '';
+    $description = "Event: " . $eventTitle . "\n";
+    $description .= "Attendee: " . $attendeeName . " (" . $attendeeEmail . ")\n";
+    $description .= "Timezone: " . $attendeeTimezone . "\n";
+    if ($location) $description .= "Location: " . $location . "\n";
+    if ($descriptionText) $description .= "Description: " . $descriptionText . "\n";
+    if ($notes) $description .= "Notes: " . $notes . "\n";
+    $description .= "Organizer: " . $organizerName;
     
     // Try to find matching lead/contact by email
-    $email = $payload['attendees'][0]['email'] ?? '';
+    $email = $attendeeEmail;
     $leadId = null;
     $contactId = null;
     
-    if ($email) {
+    if ($email && $email !== 'N/A') {
       $stmt = $pdo->prepare("SELECT id FROM leads WHERE email = :email LIMIT 1");
       $stmt->execute([':email' => $email]);
       $lead = $stmt->fetch();
@@ -2168,18 +2187,19 @@ function api_cal_webhook() {
     
     $stmt = $pdo->prepare("
       INSERT INTO calendar_events 
-        (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color)
+        (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color, location)
       VALUES 
-        (:title, :description, 'booking', :start_time, :end_time, 'confirmed', :lead_id, :contact_id, '#0066CC')
+        (:title, :description, 'booking', :start_time, :end_time, 'confirmed', :lead_id, :contact_id, '#0066CC', :location)
     ");
     
     $stmt->execute([
       ':title' => $title,
       ':description' => $description,
-      ':start_time' => $startTime,
-      ':end_time' => $endTime,
+      ':start_time' => date('Y-m-d H:i:s', strtotime($startTime)),
+      ':end_time' => date('Y-m-d H:i:s', strtotime($endTime)),
       ':lead_id' => $leadId,
-      ':contact_id' => $contactId
+      ':contact_id' => $contactId,
+      ':location' => $location
     ]);
   }
   
