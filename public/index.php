@@ -6,14 +6,14 @@ session_start();
 
 $DB_HOST = getenv('PGHOST') ?: '127.0.0.1';
 $DB_PORT = getenv('PGPORT') ?: '5432';
-$DB_NAME = getenv('PGDATABASE') ?: 'crmdb';
-$DB_USER = getenv('PGUSER') ?: 'crmuser';
-$DB_PASS = getenv('PGPASSWORD') ?: 'crmStongpassword';
+$DB_NAME = getenv('PGDATABASE') ?: '';
+$DB_USER = getenv('PGUSER') ?: '';
+$DB_PASS = getenv('PGPASSWORD') ?: '';
 
-$SMTP_HOST = getenv('SMTP_HOST') ?: 'mail.koaditech.com';
+$SMTP_HOST = getenv('SMTP_HOST') ?: '';
 $SMTP_PORT = getenv('SMTP_PORT') ?: '465';
-$SMTP_USER = getenv('SMTP_USER') ?: 'help@koaditech.com';
-$SMTP_PASS = getenv('SMTP_PASS') ?: 'Men4patj@3112';
+$SMTP_USER = getenv('SMTP_USER') ?: '';
+$SMTP_PASS = getenv('SMTP_PASS') ?: '';
 
 header_remove('X-Powered-By');
 
@@ -381,8 +381,9 @@ SQL);
   // Ensure admin user exists (passwordless - login via magic link)
   $admin_exists = $pdo->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
   if (!$admin_exists) {
-    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', 'admin@koaditech.com', '', 'Administrator', 'admin')")
-      ->execute();
+    $adminEmail = getenv('ADMIN_EMAIL') ?: 'admin@example.com';
+    $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES ('admin', :email, '', 'Administrator', 'admin')")
+      ->execute([':email' => $adminEmail]);
   }
   
   // Set all existing users to active status if NULL

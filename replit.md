@@ -120,6 +120,6 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 5. Save the webhook.
 
 ## External Dependencies
-- **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). All timestamp comparisons use explicit UTC timezone to prevent expiration mismatches.
-- **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication, specifically configured for `help@koaditech.com` via `mail.koaditech.com:465`. Development mode bypasses SMTP and logs emails instead.
+- **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). These variables must be set in production (Coolify).
+- **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication. Configured via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Development mode bypasses SMTP and logs emails instead.
 - **Retell AI:** Voice agent integration via webhook for post-call analysis. Calls are received at `?api=retell.webhook` endpoint.
