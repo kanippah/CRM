@@ -103,7 +103,7 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
   - `BOOKING_CONFIRMED` - Booking is confirmed (updates status to confirmed)
   - `BOOKING_CANCELLED` - Booking is cancelled (updates status to cancelled, color changes to red)
   - `BOOKING_RESCHEDULED` - Booking time is changed (updates times and status to rescheduled)
-- **Data Captured:** Event title, attendee name/email/timezone, organizer name/email, start/end time, location, meeting link (video URL), booking reference (UID), custom form responses, additional notes, cancellation/reschedule reasons.
+- **Data Captured:** Event title, attendee name/email/phone/timezone, organizer name/email, start/end time, location, meeting link (video URL from multiple sources), booking reference (UID), custom form responses (including "What is this meeting about?"), additional notes, cancellation/reschedule reasons. Debug logging captures full webhook payload for troubleshooting.
 - **Automatic Matching:** Incoming bookings are automatically matched to existing leads/contacts by email.
 - **Calendar Integration:** Each Cal.com booking automatically creates a 'booking' type event in the calendar (displayed in blue, cancelled in red).
 - **Status Tracking:** Bookings show their current status (pending, confirmed, cancelled, rescheduled) with visual indicators.
