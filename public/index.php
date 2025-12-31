@@ -2193,16 +2193,20 @@ function api_cal_webhook() {
     if ($organizerEmail) $description .= $organizerName . " (" . $organizerEmail . ")\n\n";
     else $description .= $organizerName . "\n\n";
     
-    if ($location || $videoUrl) {
+    $prettyLocation = $location;
+    if ($location === 'integrations:daily') $prettyLocation = 'Cal Video';
+    
+    if ($videoUrl) {
       $description .= "--- Meeting Location ---\n";
-      if ($location) $description .= "Location: " . $location . "\n";
-      if ($videoUrl) $description .= "Meeting Link: " . $videoUrl . "\n";
+      $description .= "Meeting Link: " . $videoUrl . "\n";
       $description .= "\n";
     }
     
     // Process custom responses (includes phone, notes, custom questions)
     $responses = $payload['responses'] ?? [];
     $customResponses = [];
+    
+    $skipLabels = ['name', 'email', 'phone', 'location', 'notes', 'description', 'additional guests', 'guests'];
     
     foreach ($responses as $key => $resp) {
       // Handle different response formats from Cal.com
@@ -2217,13 +2221,22 @@ function api_cal_webhook() {
         $value = $resp;
       }
       
-      // Skip empty values and already captured data
-      if (empty($value) || $value === 'N/A') continue;
+      // Skip empty values, already captured data, or useless placeholders
+      if (empty($value) || $value === 'N/A' || $value === '[]') continue;
       
-      // Capture phone from responses if not already found
-      if (!$attendeePhone && (stripos($key, 'phone') !== false || stripos($label, 'phone') !== false)) {
-        $attendeePhone = $value;
-        continue; // Will be shown in guest info
+      $lowerLabel = strtolower($label);
+      $shouldSkip = false;
+      foreach ($skipLabels as $skip) {
+        if (strpos($lowerLabel, $skip) !== false) {
+          $shouldSkip = true;
+          break;
+        }
+      }
+      if ($shouldSkip) continue;
+      
+      // Special cleanup for "What is this meeting about?"
+      if (stripos($label, 'what is this meeting about') !== false) {
+        $label = 'Purpose';
       }
       
       $customResponses[$label] = $value;
@@ -2241,8 +2254,16 @@ function api_cal_webhook() {
       $description .= "\n";
     }
     
-    if ($descriptionText) $description .= "Description: " . $descriptionText . "\n";
-    if ($notes) $description .= "Additional Notes: " . $notes . "\n";
+    // Consolidate unique notes/description
+    $finalNotes = [];
+    if ($descriptionText && $descriptionText !== 'N/A') $finalNotes[] = trim($descriptionText);
+    if ($notes && $notes !== 'N/A' && trim($notes) !== trim($descriptionText)) $finalNotes[] = trim($notes);
+    
+    if (!empty($finalNotes)) {
+      $description .= "--- Additional Info ---\n";
+      $description .= implode("\n\n", $finalNotes) . "\n";
+    }
+    
     if ($bookingUid) $description .= "\nBooking Ref: " . $bookingUid . "\n";
     
     // Update description if phone was found in responses
@@ -2281,7 +2302,7 @@ function api_cal_webhook() {
       ':end_time' => date('Y-m-d H:i:s', strtotime($endTime)),
       ':lead_id' => $leadId,
       ':contact_id' => $contactId,
-      ':location' => $location,
+      ':location' => $prettyLocation ?: $location,
       ':booking_uid' => $bookingUid
     ]);
   }
