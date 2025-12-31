@@ -1720,10 +1720,19 @@ function api_retell_webhook() {
   
   // Extract improvement recommendations and call score from analysis if available
   $analysisData = $call['analysis_results'] ?? [];
-  $callSummary = $analysisData['call_summary'] ?? $analysisData['summary'] ?? null;
-  $improvementRecommendations = $analysisData['improvement_recommendations'] ?? $analysisData['improvements'] ?? $analysisData['feedback'] ?? null;
-  $callScore = isset($analysisData['call_score']) ? (int)$analysisData['call_score'] : 
-               (isset($analysisData['quality_score']) ? (int)$analysisData['quality_score'] : null);
+  $callAnalysis = $call['call_analysis'] ?? [];
+  $customAnalysis = $callAnalysis['custom_analysis_data'] ?? [];
+  
+  $callSummary = $callAnalysis['call_summary'] ?? $analysisData['call_summary'] ?? $analysisData['summary'] ?? null;
+  
+  $improvementRecommendations = $customAnalysis['improvement_recommendations'] ?? 
+                                $analysisData['improvement_recommendations'] ?? 
+                                $analysisData['improvements'] ?? 
+                                $analysisData['feedback'] ?? null;
+                                
+  $callScore = isset($customAnalysis['call_score']) ? (int)$customAnalysis['call_score'] : 
+               (isset($analysisData['call_score']) ? (int)$analysisData['call_score'] : 
+               (isset($analysisData['quality_score']) ? (int)$analysisData['quality_score'] : null));
   
   $metadata = isset($call['metadata']) ? json_encode($call['metadata']) : null;
   

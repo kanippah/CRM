@@ -1,0 +1,38 @@
+[Wed Dec 31 06:06:24 2025] Retell webhook: Received signature: v=1767161182827,d=247f1cebbbdf1f29da3a38af17f1fbd6316e55ad9032e48b9cb4d90dc41c4b8f
+[Wed Dec 31 06:06:24 2025] Retell webhook: Expected (normalized): 842189aea4807f243721b505ddab6f93103d5f270d7b65637db7cb26352e9380
+[Wed Dec 31 06:06:24 2025] Retell webhook: Expected (raw): ba5cb564a59c5282ece788addf2db45ab0d1b58050a5f483a82eeff108e7e581
+[Wed Dec 31 06:06:24 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
+[Wed Dec 31 06:06:24 2025] 172.31.103.226:46590 Closing
+[Wed Dec 31 06:07:34 2025] 172.31.103.226:46000 Accepted
+[Wed Dec 31 06:07:35 2025] Retell webhook: Received signature: v=1767161253968,d=38634890ec681a7636919d3b6dcc5265b26951079299fce0c566ef3c00a925a8
+[Wed Dec 31 06:07:35 2025] Retell webhook: Expected (normalized): 33ad98458199af0396707c8c48fd87a0fdebb7839d6ef4a41cbd8c9c96aa0f3f
+[Wed Dec 31 06:07:35 2025] Retell webhook: Expected (raw): 33ad98458199af0396707c8c48fd87a0fdebb7839d6ef4a41cbd8c9c96aa0f3f
+[Wed Dec 31 06:07:35 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
+[Wed Dec 31 06:07:36 2025] 172.31.103.226:46000 Closing
+[Wed Dec 31 06:07:36 2025] 172.31.103.226:46010 Accepted
+[Wed Dec 31 06:07:37 2025] Retell webhook: Received signature: v=1767161254645,d=4af558fb6518e42311f5976f067c8a5722956a43dca3d68fd329296d1c4d23dc
+[Wed Dec 31 06:07:37 2025] Retell webhook: Expected (normalized): 1c0c1a104c68ed649026ee74080ec302b900890d5dc03fa45c6a56828ffb6d53
+[Wed Dec 31 06:07:37 2025] Retell webhook: Expected (raw): 910b287e59ae512c8e60ff0a18531c6a4adc7aedeadaf5098ab19253a0de7168
+[Wed Dec 31 06:07:37 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
+[Wed Dec 31 06:07:38 2025] 172.31.103.226:46010 Closing
+[Wed Dec 31 06:08:07 2025] 172.31.103.226:43666 Accepted
+[Wed Dec 31 06:08:09 2025] 172.31.103.226:43666 Closing
+[Wed Dec 31 06:08:13 2025] 172.31.103.226:58544 Accepted
+[Wed Dec 31 06:08:15 2025] 172.31.103.226:58544 Closing
+[Wed Dec 31 06:10:34 2025] 172.31.103.226:50674 Accepted
+[Wed Dec 31 06:10:38 2025] Retell webhook: Received signature: v=1767161434745,d=c6a78237b54d9c623cf9dcc69e20d7e6adfad421843f68e185797d7e2c324194
+[Wed Dec 31 06:10:38 2025] Retell webhook: Expected (normalized): a341e7fc3a3b70a8a9b3b78b8e4776fd985ad112578a3406d4da80ef9427a2e9
+[Wed Dec 31 06:10:38 2025] Retell webhook: Expected (raw): 29d2ae09eabd46ed8fa8f4a8e86b99570fbe219aed7e7ff082d69db06897b50c
+[Wed Dec 31 06:10:38 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
+[Wed Dec 31 06:10:38 2025] 172.31.103.226:50674 Closing
+[Wed Dec 31 06:12:17 2025] 172.31.103.226:35384 Accepted
+[Wed Dec 31 06:12:19 2025] Retell webhook: Received signature: v=1767161537582,d=edcb87d4e2c125c2edeef4cb053a09581d640c55df537255b17bda0747192bcc
+[Wed Dec 31 06:12:19 2025] Retell webhook: Expected (normalized): 44adbf687eb13d1b6d998b12b88db0d9a6bce3cb4bb57941515258b451d4e018
+[Wed Dec 31 06:12:19 2025] Retell webhook: Expected (raw): 44adbf687eb13d1b6d998b12b88db0d9a6bce3cb4bb57941515258b451d4e018
+[Wed Dec 31 06:12:19 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
+[Wed Dec 31 06:12:20 2025] 172.31.103.226:35384 Closing
+[Wed Dec 31 06:12:20 2025] 172.31.103.226:35386 Accepted
+[Wed Dec 31 06:12:21 2025] Retell webhook: Received signature: v=1767161538884,d=96b3111518c051c15cbb82c363df0519886bb38c9a468d3d3f6554ad473acbe9
+[Wed Dec 31 06:12:21 2025] Retell webhook: Expected (normalized): c3504262b568b58f18990836ac677201b5b7babc98b53cda0ccd95d68801167c
+[Wed Dec 31 06:12:21 2025] Retell webhook: Expected (raw): 4b012eedbbc5d065cc625cd0dddc22cb4f2241132c2ddc09061d93f21b919d7a
+[Wed Dec 31 06:12:21 2025] Retell webhook: Signature mismatch - accepting anyway for debugging
