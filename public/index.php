@@ -3546,35 +3546,42 @@ if (isset($_GET['background'])) {
       
       showModal(`
         <h3>🤖 AI Call Details</h3>
-        <div class="form-group">
-          <label>Caller</label>
-          <div>${callerName}</div>
-          <div style="color: var(--muted); font-size: 13px;">${callerNumber || 'Unknown number'}</div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-          <div class="form-group">
-            <label>Direction</label>
-            <div>${call.direction === 'inbound' ? '📥 Inbound' : '📤 Outbound'}</div>
-          </div>
-          <div class="form-group">
-            <label>Duration</label>
-            <div>${duration}</div>
-          </div>
-          <div class="form-group">
-            <label>Started</label>
-            <div>${startDate}</div>
-          </div>
-          <div class="form-group">
-            <label>Ended</label>
-            <div>${endDate}</div>
-          </div>
-        </div>
-        ${call.call_score ? `
-          <div class="form-group">
-            <label>Call Score</label>
-            <div style="font-size: 24px; font-weight: bold; color: ${call.call_score >= 7 ? '#22c55e' : call.call_score >= 4 ? '#f59e0b' : '#ef4444'};">${call.call_score}/10</div>
-          </div>
-        ` : ''}
+        <table class="detail-table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); width: 140px; background: rgba(0,0,0,0.02);">Caller</th>
+            <td style="padding: 12px 10px;">
+              <div style="font-weight: 600;">${callerName}</div>
+              <div style="color: var(--muted); font-size: 13px;">${callerNumber || 'Unknown number'}</div>
+            </td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); background: rgba(0,0,0,0.02);">Direction</th>
+            <td style="padding: 12px 10px;">${call.direction === 'inbound' ? '📥 Inbound' : '📤 Outbound'}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); background: rgba(0,0,0,0.02);">Duration</th>
+            <td style="padding: 12px 10px; font-family: monospace;">${duration}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); background: rgba(0,0,0,0.02);">Started</th>
+            <td style="padding: 12px 10px;">${startDate}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); background: rgba(0,0,0,0.02);">Ended</th>
+            <td style="padding: 12px 10px;">${endDate}</td>
+          </tr>
+          ${call.call_score ? `
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align: left; padding: 12px 10px; color: var(--muted); background: rgba(0,0,0,0.02);">Call Score</th>
+            <td style="padding: 12px 10px;">
+              <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; background: ${call.call_score >= 7 ? '#dcfce7' : call.call_score >= 4 ? '#fef3c7' : '#fee2e2'}; color: ${call.call_score >= 7 ? '#15803d' : call.call_score >= 4 ? '#b45309' : '#b91c1c'};">
+                ${call.call_score}/10
+              </span>
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+
         ${call.call_summary ? `
           <div class="form-group">
             <label>Summary</label>
