@@ -95,18 +95,28 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - `calendar.delete` - Delete calendar events
 
 ### Cal.com Integration
-**Purpose:** Receive and display bookings made via Cal.com.
+**Purpose:** Receive and display bookings made via Cal.com with full lifecycle tracking.
 **Implementation:**
-- **Webhook Endpoint:** `?api=cal.webhook` receives POST data from Cal.com when a booking is created.
-- **Data Captured:** Event title, description (attendee email), start time, end time.
+- **Webhook Endpoint:** `?api=cal.webhook` receives POST data from Cal.com for booking events.
+- **Supported Events:**
+  - `BOOKING_CREATED` - New booking is made (status: confirmed or pending based on requiresConfirmation)
+  - `BOOKING_CONFIRMED` - Booking is confirmed (updates status to confirmed)
+  - `BOOKING_CANCELLED` - Booking is cancelled (updates status to cancelled, color changes to red)
+  - `BOOKING_RESCHEDULED` - Booking time is changed (updates times and status to rescheduled)
+- **Data Captured:** Event title, attendee name/email/timezone, organizer name/email, start/end time, location, meeting link (video URL), booking reference (UID), custom form responses, additional notes, cancellation/reschedule reasons.
 - **Automatic Matching:** Incoming bookings are automatically matched to existing leads/contacts by email.
-- **Calendar Integration:** Each Cal.com booking automatically creates a 'booking' type event in the calendar (displayed in blue).
+- **Calendar Integration:** Each Cal.com booking automatically creates a 'booking' type event in the calendar (displayed in blue, cancelled in red).
+- **Status Tracking:** Bookings show their current status (pending, confirmed, cancelled, rescheduled) with visual indicators.
 
 ### Webhook Setup Instructions (Cal.com)
 1. In your Cal.com dashboard, go to Settings → Webhooks.
 2. Click "Add new webhook".
 3. Set the Payload URL to: `https://your-domain.com/?api=cal.webhook`.
-4. Select "Booking created" as the event trigger.
+4. Select these event triggers:
+   - Booking created
+   - Booking confirmed (if you use confirmation workflows)
+   - Booking cancelled
+   - Booking rescheduled
 5. Save the webhook.
 
 ## External Dependencies

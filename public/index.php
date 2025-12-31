@@ -357,6 +357,7 @@ function ensure_schema() {
       all_day BOOLEAN DEFAULT false,
       location TEXT,
       status TEXT DEFAULT 'scheduled',
+      booking_uid TEXT,
       related_entity_type TEXT,
       related_entity_id INTEGER,
       retell_call_id INTEGER REFERENCES retell_calls(id) ON DELETE SET NULL,
@@ -368,6 +369,8 @@ function ensure_schema() {
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
+    
+    ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS booking_uid TEXT;
     
     CREATE INDEX IF NOT EXISTS idx_calendar_events_start ON calendar_events(start_time);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(event_type);
@@ -2207,11 +2210,15 @@ function api_cal_webhook() {
       if ($contact) $contactId = $contact['id'];
     }
     
+    // Determine initial status based on whether confirmation is required
+    $requiresConfirmation = $payload['requiresConfirmation'] ?? false;
+    $initialStatus = $requiresConfirmation ? 'pending' : 'confirmed';
+    
     $stmt = $pdo->prepare("
       INSERT INTO calendar_events 
-        (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color, location)
+        (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color, location, booking_uid)
       VALUES 
-        (:title, :description, 'booking', :start_time, :end_time, 'confirmed', :lead_id, :contact_id, '#0066CC', :location)
+        (:title, :description, 'booking', :start_time, :end_time, :status, :lead_id, :contact_id, '#0066CC', :location, :booking_uid)
     ");
     
     $stmt->execute([
@@ -2219,10 +2226,107 @@ function api_cal_webhook() {
       ':description' => $description,
       ':start_time' => date('Y-m-d H:i:s', strtotime($startTime)),
       ':end_time' => date('Y-m-d H:i:s', strtotime($endTime)),
+      ':status' => $initialStatus,
       ':lead_id' => $leadId,
       ':contact_id' => $contactId,
-      ':location' => $location
+      ':location' => $location,
+      ':booking_uid' => $bookingUid
     ]);
+  }
+  
+  // Handle booking confirmation
+  if ($triggerEvent === 'BOOKING_CONFIRMED') {
+    $pdo = db();
+    $bookingUid = $payload['uid'] ?? '';
+    
+    if ($bookingUid) {
+      $stmt = $pdo->prepare("
+        UPDATE calendar_events 
+        SET status = 'confirmed', updated_at = now() 
+        WHERE booking_uid = :booking_uid
+      ");
+      $stmt->execute([':booking_uid' => $bookingUid]);
+    }
+  }
+  
+  // Handle booking cancellation
+  if ($triggerEvent === 'BOOKING_CANCELLED') {
+    $pdo = db();
+    $bookingUid = $payload['uid'] ?? '';
+    $cancellationReason = $payload['cancellationReason'] ?? '';
+    
+    if ($bookingUid) {
+      // Update the event status to cancelled and add cancellation reason to description
+      $stmt = $pdo->prepare("SELECT id, description FROM calendar_events WHERE booking_uid = :booking_uid");
+      $stmt->execute([':booking_uid' => $bookingUid]);
+      $event = $stmt->fetch();
+      
+      if ($event) {
+        $newDescription = $event['description'];
+        $newDescription .= "\n\n--- CANCELLED ---\n";
+        $newDescription .= "Cancelled at: " . date('Y-m-d H:i:s') . "\n";
+        if ($cancellationReason) {
+          $newDescription .= "Reason: " . $cancellationReason . "\n";
+        }
+        
+        $stmt = $pdo->prepare("
+          UPDATE calendar_events 
+          SET status = 'cancelled', description = :description, color = '#dc2626', updated_at = now() 
+          WHERE booking_uid = :booking_uid
+        ");
+        $stmt->execute([
+          ':booking_uid' => $bookingUid,
+          ':description' => $newDescription
+        ]);
+      }
+    }
+  }
+  
+  // Handle booking reschedule
+  if ($triggerEvent === 'BOOKING_RESCHEDULED') {
+    $pdo = db();
+    $bookingUid = $payload['uid'] ?? '';
+    $rescheduleUid = $payload['rescheduleUid'] ?? '';
+    $newStartTime = $payload['startTime'] ?? '';
+    $newEndTime = $payload['endTime'] ?? '';
+    $rescheduleReason = $payload['rescheduleReason'] ?? '';
+    
+    // Try to find by rescheduleUid first (this is the original booking's uid)
+    $searchUid = $rescheduleUid ?: $bookingUid;
+    
+    if ($searchUid && $newStartTime) {
+      $stmt = $pdo->prepare("SELECT id, description FROM calendar_events WHERE booking_uid = :booking_uid");
+      $stmt->execute([':booking_uid' => $searchUid]);
+      $event = $stmt->fetch();
+      
+      if ($event) {
+        $newDescription = $event['description'];
+        $newDescription .= "\n\n--- RESCHEDULED ---\n";
+        $newDescription .= "Rescheduled at: " . date('Y-m-d H:i:s') . "\n";
+        $newDescription .= "New time: " . date('F j, Y g:i A', strtotime($newStartTime)) . "\n";
+        if ($rescheduleReason) {
+          $newDescription .= "Reason: " . $rescheduleReason . "\n";
+        }
+        
+        $stmt = $pdo->prepare("
+          UPDATE calendar_events 
+          SET start_time = :start_time, 
+              end_time = :end_time, 
+              description = :description, 
+              booking_uid = :new_uid,
+              status = 'rescheduled',
+              updated_at = now() 
+          WHERE booking_uid = :old_uid
+        ");
+        $stmt->execute([
+          ':start_time' => date('Y-m-d H:i:s', strtotime($newStartTime)),
+          ':end_time' => $newEndTime ? date('Y-m-d H:i:s', strtotime($newEndTime)) : null,
+          ':description' => $newDescription,
+          ':new_uid' => $bookingUid,
+          ':old_uid' => $searchUid
+        ]);
+      }
+    }
   }
   
   respond(['ok' => true]);
