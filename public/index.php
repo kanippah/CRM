@@ -1831,7 +1831,8 @@ function api_retell_calls_list() {
   $offset = ($page - 1) * $limit;
   $status = $_GET['status'] ?? '';
   $direction = $_GET['direction'] ?? '';
-  $date = $_GET['date'] ?? '';
+  $startDate = $_GET['start_date'] ?? '';
+  $endDate = $_GET['end_date'] ?? '';
   $q = $_GET['q'] ?? '';
   
   $where_parts = [];
@@ -1847,9 +1848,13 @@ function api_retell_calls_list() {
     $params[':direction'] = $direction;
   }
 
-  if ($date) {
-    $where_parts[] = "CAST(rc.created_at AS DATE) = :date";
-    $params[':date'] = $date;
+  if ($startDate) {
+    $where_parts[] = "CAST(rc.created_at AS DATE) >= :start_date";
+    $params[':start_date'] = $startDate;
+  }
+  if ($endDate) {
+    $where_parts[] = "CAST(rc.created_at AS DATE) <= :end_date";
+    $params[':end_date'] = $endDate;
   }
   
   if ($q) {
@@ -3348,9 +3353,11 @@ if (isset($_GET['background'])) {
     }
     
     let aiCallsPage = 1;
+    let aiCallsLimit = 20;
     let aiCallsDirection = '';
     let aiCallsSearch = '';
-    let aiCallsDate = '';
+    let aiCallsStartDate = '';
+    let aiCallsEndDate = '';
     
     async function renderAICalls() {
       document.getElementById('view-ai-calls').innerHTML = `
@@ -3364,8 +3371,18 @@ if (isset($_GET['background'])) {
               <option value="inbound" ${aiCallsDirection === 'inbound' ? 'selected' : ''}>Inbound</option>
               <option value="outbound" ${aiCallsDirection === 'outbound' ? 'selected' : ''}>Outbound</option>
             </select>
-            <input type="date" id="aiCallsDate" onchange="filterAICalls()" value="${aiCallsDate}" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-            <input type="text" class="search" id="aiCallsSearch" placeholder="Search by name, number or transcript..." value="${aiCallsSearch}" oninput="filterAICalls()" style="flex: 1; min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <input type="date" id="aiCallsStartDate" onchange="filterAICalls()" value="${aiCallsStartDate}" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+              <span>to</span>
+              <input type="date" id="aiCallsEndDate" onchange="filterAICalls()" value="${aiCallsEndDate}" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            </div>
+            <input type="text" class="search" id="aiCallsSearch" placeholder="Search by caller name, number..." value="${aiCallsSearch}" oninput="filterAICalls()" style="flex: 1; min-width: 200px;">
+            <select id="aiCallsLimit" onchange="changeAICallsLimit()" style="padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+              <option value="10" ${aiCallsLimit == 10 ? 'selected' : ''}>10 per page</option>
+              <option value="20" ${aiCallsLimit == 20 ? 'selected' : ''}>20 per page</option>
+              <option value="50" ${aiCallsLimit == 50 ? 'selected' : ''}>50 per page</option>
+              <option value="100" ${aiCallsLimit == 100 ? 'selected' : ''}>100 per page</option>
+            </select>
           </div>
         </div>
         <div class="card">
@@ -3379,7 +3396,14 @@ if (isset($_GET['background'])) {
     async function filterAICalls() {
       aiCallsDirection = document.getElementById('aiCallsDirection')?.value || '';
       aiCallsSearch = document.getElementById('aiCallsSearch')?.value || '';
-      aiCallsDate = document.getElementById('aiCallsDate')?.value || '';
+      aiCallsStartDate = document.getElementById('aiCallsStartDate')?.value || '';
+      aiCallsEndDate = document.getElementById('aiCallsEndDate')?.value || '';
+      aiCallsPage = 1;
+      loadAICalls();
+    }
+
+    async function changeAICallsLimit() {
+      aiCallsLimit = parseInt(document.getElementById('aiCallsLimit')?.value || 20);
       aiCallsPage = 1;
       loadAICalls();
     }
@@ -3387,10 +3411,11 @@ if (isset($_GET['background'])) {
     async function loadAICalls() {
       const params = new URLSearchParams({
         page: aiCallsPage,
-        limit: 20,
+        limit: aiCallsLimit,
         direction: aiCallsDirection,
         q: aiCallsSearch,
-        date: aiCallsDate
+        start_date: aiCallsStartDate,
+        end_date: aiCallsEndDate
       });
       
       const data = await api('retell_calls.list&' + params.toString());
@@ -3420,7 +3445,7 @@ if (isset($_GET['background'])) {
             <tr style="border-bottom: 2px solid var(--border);">
               <th style="padding: 12px; text-align: left;">Date & Time</th>
               <th style="padding: 12px; text-align: left;">Direction</th>
-              <th style="padding: 12px; text-align: left;">Name</th>
+              <th style="padding: 12px; text-align: left;">Caller Name</th>
               <th style="padding: 12px; text-align: left;">Phone Number</th>
               <th style="padding: 12px; text-align: left;">Duration</th>
               <th style="padding: 12px; text-align: left;">Score</th>
