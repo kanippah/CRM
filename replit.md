@@ -99,7 +99,7 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 **Implementation:**
 - **Webhook Endpoint:** `?api=cal.webhook` receives POST data from Cal.com for booking events.
 - **Supported Events:**
-  - `BOOKING_CREATED` - New booking is made (status: confirmed or pending based on requiresConfirmation)
+  - `BOOKING_CREATED` - New booking is made (status: always confirmed)
   - `BOOKING_CONFIRMED` - Booking is confirmed (updates status to confirmed)
   - `BOOKING_CANCELLED` - Booking is cancelled (updates status to cancelled, color changes to red)
   - `BOOKING_RESCHEDULED` - Booking time is changed (updates times and status to rescheduled)

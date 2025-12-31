@@ -2210,15 +2210,11 @@ function api_cal_webhook() {
       if ($contact) $contactId = $contact['id'];
     }
     
-    // Determine initial status based on whether confirmation is required
-    $requiresConfirmation = $payload['requiresConfirmation'] ?? false;
-    $initialStatus = $requiresConfirmation ? 'pending' : 'confirmed';
-    
     $stmt = $pdo->prepare("
       INSERT INTO calendar_events 
         (title, description, event_type, start_time, end_time, status, lead_id, contact_id, color, location, booking_uid)
       VALUES 
-        (:title, :description, 'booking', :start_time, :end_time, :status, :lead_id, :contact_id, '#0066CC', :location, :booking_uid)
+        (:title, :description, 'booking', :start_time, :end_time, 'confirmed', :lead_id, :contact_id, '#0066CC', :location, :booking_uid)
     ");
     
     $stmt->execute([
@@ -2226,7 +2222,6 @@ function api_cal_webhook() {
       ':description' => $description,
       ':start_time' => date('Y-m-d H:i:s', strtotime($startTime)),
       ':end_time' => date('Y-m-d H:i:s', strtotime($endTime)),
-      ':status' => $initialStatus,
       ':lead_id' => $leadId,
       ':contact_id' => $contactId,
       ':location' => $location,
