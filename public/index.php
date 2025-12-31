@@ -3597,10 +3597,16 @@ if (isset($_GET['background'])) {
     
     let calendarYear = new Date().getFullYear();
     let calendarMonth = new Date().getMonth();
+    let calendarDay = new Date().getDate();
     let calendarView = 'month';
     
     async function renderCalendar() {
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      let viewTitle = `${monthNames[calendarMonth]} ${calendarYear}`;
+      if (calendarView === 'day') {
+        viewTitle = `${monthNames[calendarMonth]} ${calendarDay}, ${calendarYear}`;
+      }
       
       document.getElementById('view-calendar').innerHTML = `
         <div class="toolbar">
@@ -3610,16 +3616,17 @@ if (isset($_GET['background'])) {
         <div class="card" style="margin-bottom: 20px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; gap: 10px; align-items: center;">
-              <button class="btn" onclick="prevMonth()">◀</button>
+              <button class="btn" onclick="prevPeriod()">◀</button>
               <span style="font-size: 18px; font-weight: bold; min-width: 180px; text-align: center;">
-                ${monthNames[calendarMonth]} ${calendarYear}
+                ${viewTitle}
               </span>
-              <button class="btn" onclick="nextMonth()">▶</button>
+              <button class="btn" onclick="nextPeriod()">▶</button>
               <button class="btn secondary" onclick="goToToday()">Today</button>
             </div>
             <div style="display: flex; gap: 5px;">
-              <button class="btn ${calendarView === 'month' ? '' : 'secondary'}" onclick="setCalendarView('month')">Month</button>
+              <button class="btn ${calendarView === 'day' ? '' : 'secondary'}" onclick="setCalendarView('day')">Day</button>
               <button class="btn ${calendarView === 'week' ? '' : 'secondary'}" onclick="setCalendarView('week')">Week</button>
+              <button class="btn ${calendarView === 'month' ? '' : 'secondary'}" onclick="setCalendarView('month')">Month</button>
             </div>
           </div>
         </div>
@@ -3628,27 +3635,53 @@ if (isset($_GET['background'])) {
       loadCalendar();
     }
     
-    function prevMonth() {
-      calendarMonth--;
-      if (calendarMonth < 0) {
-        calendarMonth = 11;
-        calendarYear--;
+    function prevPeriod() {
+      if (calendarView === 'day') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay - 1);
+        calendarYear = date.getFullYear();
+        calendarMonth = date.getMonth();
+        calendarDay = date.getDate();
+      } else if (calendarView === 'week') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay - 7);
+        calendarYear = date.getFullYear();
+        calendarMonth = date.getMonth();
+        calendarDay = date.getDate();
+      } else {
+        calendarMonth--;
+        if (calendarMonth < 0) {
+          calendarMonth = 11;
+          calendarYear--;
+        }
       }
       renderCalendar();
     }
     
-    function nextMonth() {
-      calendarMonth++;
-      if (calendarMonth > 11) {
-        calendarMonth = 0;
-        calendarYear++;
+    function nextPeriod() {
+      if (calendarView === 'day') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay + 1);
+        calendarYear = date.getFullYear();
+        calendarMonth = date.getMonth();
+        calendarDay = date.getDate();
+      } else if (calendarView === 'week') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay + 7);
+        calendarYear = date.getFullYear();
+        calendarMonth = date.getMonth();
+        calendarDay = date.getDate();
+      } else {
+        calendarMonth++;
+        if (calendarMonth > 11) {
+          calendarMonth = 0;
+          calendarYear++;
+        }
       }
       renderCalendar();
     }
     
     function goToToday() {
-      calendarYear = new Date().getFullYear();
-      calendarMonth = new Date().getMonth();
+      const today = new Date();
+      calendarYear = today.getFullYear();
+      calendarMonth = today.getMonth();
+      calendarDay = today.getDate();
       renderCalendar();
     }
     
@@ -3658,21 +3691,73 @@ if (isset($_GET['background'])) {
     }
     
     async function loadCalendar() {
-      const startDate = new Date(calendarYear, calendarMonth, 1);
-      const endDate = new Date(calendarYear, calendarMonth + 1, 0);
-      
-      const start = startDate.toISOString().split('T')[0];
-      const end = endDate.toISOString().split('T')[0] + 'T23:59:59';
+      let start, end;
+      if (calendarView === 'day') {
+        const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(calendarDay).padStart(2, '0')}`;
+        start = dateStr;
+        end = dateStr + 'T23:59:59';
+      } else if (calendarView === 'week') {
+        const date = new Date(calendarYear, calendarMonth, calendarDay);
+        const dayOfWeek = date.getDay();
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        
+        start = startOfWeek.toISOString().split('T')[0];
+        end = endOfWeek.toISOString().split('T')[0] + 'T23:59:59';
+      } else {
+        const startDate = new Date(calendarYear, calendarMonth, 1);
+        const endDate = new Date(calendarYear, calendarMonth + 1, 0);
+        start = startDate.toISOString().split('T')[0];
+        end = endDate.toISOString().split('T')[0] + 'T23:59:59';
+      }
       
       const data = await api(`calendar.list&start=${start}&end=${end}`);
-      // Filter out AI calls - only show bookings, schedules, and meetings
       const events = (data.items || []).filter(e => e.event_type !== 'call');
       
       if (calendarView === 'month') {
         renderMonthView(events);
+      } else if (calendarView === 'week') {
+        renderWeekView(events, start);
       } else {
-        renderWeekView(events);
+        renderDayView(events);
       }
+    }
+    
+    function renderDayView(events) {
+      const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(calendarDay).padStart(2, '0')}`;
+      const dayEvents = events.filter(e => e.start_time && e.start_time.startsWith(dateStr));
+      
+      let grid = `
+        <div style="padding: 20px;">
+          <h3 style="margin-bottom: 20px;">Events for ${dateStr}</h3>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+      `;
+      
+      if (dayEvents.length === 0) {
+        grid += `<div style="text-align: center; color: var(--muted); padding: 40px;">No events scheduled for this day</div>`;
+      } else {
+        dayEvents.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        grid += dayEvents.map(e => {
+          const color = e.color || (e.event_type === 'call' ? '#FF8C42' : e.event_type === 'booking' ? '#0066CC' : '#22c55e');
+          const time = new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const endTime = e.end_time ? ' - ' + new Date(e.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          return `
+            <div onclick="viewEvent(${e.id})" style="background: var(--panel); border-left: 5px solid ${color}; padding: 15px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: bold; font-size: 16px;">${e.title}</div>
+                <div style="color: var(--muted); font-size: 13px;">${time}${endTime}</div>
+                ${e.location ? `<div style="font-size: 12px; margin-top: 5px;">📍 ${e.location}</div>` : ''}
+              </div>
+              <div style="background: ${color}; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px; text-transform: uppercase;">${e.event_type}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      grid += '</div></div>';
+      document.getElementById('calendarGrid').innerHTML = grid;
     }
     
     function renderMonthView(events) {
@@ -3747,9 +3832,9 @@ if (isset($_GET['background'])) {
       document.getElementById('calendarGrid').innerHTML = grid;
     }
     
-    function renderWeekView(events) {
+    function renderWeekView(events, weekStartStr) {
       const today = new Date();
-      const startOfWeek = new Date(calendarYear, calendarMonth, today.getDate() - today.getDay());
+      const startOfWeek = new Date(weekStartStr);
       
       let grid = `<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);">`;
       
@@ -3772,7 +3857,7 @@ if (isset($_GET['background'])) {
         }).join('');
         
         grid += `
-          <div style="background: var(--panel); min-height: 200px; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
+          <div onclick="openEventForm(null, '${dateStr}')" style="background: var(--panel); min-height: 200px; cursor: pointer; ${isToday ? 'border: 2px solid var(--kt-orange);' : ''}">
             <div style="padding: 10px; text-align: center; border-bottom: 1px solid var(--border); ${isToday ? 'background: var(--kt-orange); color: white;' : ''}">
               <div style="font-weight: bold;">${days[i]}</div>
               <div style="font-size: 20px;">${date.getDate()}</div>
