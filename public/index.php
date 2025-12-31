@@ -1721,6 +1721,7 @@ function api_retell_webhook() {
   $transcript = $call['transcript'] ?? null;
   $transcriptObject = isset($call['transcript_object']) ? json_encode($call['transcript_object']) : null;
   $analysisResults = isset($call['analysis_results']) ? json_encode($call['analysis_results']) : null;
+  $recordingUrl = $call['recording_url'] ?? null;
   
   // Extract improvement recommendations and call score from analysis if available
   $analysisData = $call['analysis_results'] ?? [];
@@ -1772,12 +1773,12 @@ function api_retell_webhook() {
       (retell_call_id, agent_id, call_type, direction, from_number, to_number, call_status, 
        disconnection_reason, start_timestamp, end_timestamp, duration_seconds, transcript, 
        transcript_object, analysis_results, call_summary, improvement_recommendations, call_score,
-       metadata, raw_payload, lead_id, contact_id, updated_at)
+       metadata, raw_payload, recording_url, lead_id, contact_id, updated_at)
     VALUES 
       (:retell_call_id, :agent_id, :call_type, :direction, :from_number, :to_number, :call_status,
        :disconnection_reason, :start_timestamp, :end_timestamp, :duration_seconds, :transcript,
        :transcript_object, :analysis_results, :call_summary, :improvement_recommendations, :call_score,
-       :metadata, :raw_payload, :lead_id, :contact_id, now())
+       :metadata, :raw_payload, :recording_url, :lead_id, :contact_id, now())
     ON CONFLICT (retell_call_id) DO UPDATE SET
       call_status = EXCLUDED.call_status,
       disconnection_reason = EXCLUDED.disconnection_reason,
@@ -1790,6 +1791,7 @@ function api_retell_webhook() {
       improvement_recommendations = EXCLUDED.improvement_recommendations,
       call_score = EXCLUDED.call_score,
       raw_payload = EXCLUDED.raw_payload,
+      recording_url = EXCLUDED.recording_url,
       lead_id = COALESCE(EXCLUDED.lead_id, retell_calls.lead_id),
       contact_id = COALESCE(EXCLUDED.contact_id, retell_calls.contact_id),
       updated_at = now()
@@ -1816,6 +1818,7 @@ function api_retell_webhook() {
     ':call_score' => $callScore,
     ':metadata' => $metadata,
     ':raw_payload' => $rawPayload,
+    ':recording_url' => $recordingUrl,
     ':lead_id' => $leadId,
     ':contact_id' => $contactId
   ]);
@@ -3805,6 +3808,20 @@ if (isset($_GET['background'])) {
           </tr>
         </table>
 
+        ${call.recording_url ? `
+          <div class="form-group">
+            <label>Recording</label>
+            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; gap: 15px;">
+              <audio controls style="flex: 1; height: 35px;">
+                <source src="${call.recording_url}" type="audio/wav">
+                Your browser does not support the audio element.
+              </audio>
+              <a href="${call.recording_url}" download="recording-${call.retell_call_id}.wav" class="btn" style="background: var(--kt-blue); color: white; text-decoration: none; padding: 8px 15px; font-size: 13px; border-radius: 6px;">
+                Download
+              </a>
+            </div>
+          </div>
+        ` : ''}
         ${call.call_summary ? `
           <div class="form-group">
             <label>Summary</label>
