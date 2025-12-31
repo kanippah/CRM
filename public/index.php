@@ -2148,13 +2148,19 @@ function api_cal_webhook() {
   if ($triggerEvent === 'BOOKING_CREATED') {
     $pdo = db();
     
+    // Log full payload for debugging
+    error_log("Cal.com BOOKING_CREATED payload: " . json_encode($payload, JSON_PRETTY_PRINT));
+    
     $attendee = $payload['attendees'][0] ?? [];
     $attendeeName = $attendee['name'] ?? 'Guest';
     $attendeeEmail = $attendee['email'] ?? 'N/A';
     $attendeeTimezone = $attendee['timeZone'] ?? 'N/A';
+    // Capture phone number from multiple possible locations
+    $attendeePhone = $attendee['phoneNumber'] ?? $attendee['phone'] ?? '';
     
     $organizer = $payload['organizer'] ?? [];
     $organizerName = $organizer['name'] ?? 'Organizer';
+    $organizerEmail = $organizer['email'] ?? '';
     
     $title = "Cal.com: " . $attendeeName;
     
@@ -2165,34 +2171,84 @@ function api_cal_webhook() {
     $notes = $payload['additionalNotes'] ?? '';
     $descriptionText = $payload['description'] ?? '';
     $bookingUid = $payload['uid'] ?? '';
-    $videoUrl = $payload['metadata']['videoCallUrl'] ?? '';
-    $organizerEmail = $organizer['email'] ?? '';
     
-    $description = "Event: " . $eventTitle . "\n";
-    $description .= "Attendee: " . $attendeeName . " (" . $attendeeEmail . ")\n";
-    $description .= "Timezone: " . $attendeeTimezone . "\n";
-    if ($organizerEmail) $description .= "Organizer: " . $organizerName . " (" . $organizerEmail . ")\n";
-    else $description .= "Organizer: " . $organizerName . "\n";
+    // Check multiple locations for video URL
+    $videoUrl = $payload['metadata']['videoCallUrl'] 
+      ?? $payload['videoCallUrl'] 
+      ?? $payload['conferenceData']['entryPoints'][0]['uri'] 
+      ?? $payload['metadata']['conferenceUrl']
+      ?? '';
     
-    if ($location) $description .= "Location: " . $location . "\n";
-    if ($videoUrl) $description .= "Meeting Link: " . $videoUrl . "\n";
-    if ($bookingUid) $description .= "Booking Ref: " . $bookingUid . "\n";
+    // Build description with all booking details
+    $description = "--- Booking Details ---\n";
+    $description .= "Event: " . $eventTitle . "\n\n";
     
-    // Process custom responses
-    if (!empty($payload['responses'])) {
-      $description .= "\n--- Booking Responses ---\n";
-      foreach ($payload['responses'] as $key => $resp) {
-        $label = $resp['label'] ?? $key;
-        $value = $resp['value'] ?? 'N/A';
-        if (is_array($value)) {
-          $value = $value['value'] ?? json_encode($value);
-        }
-        $description .= $label . ": " . $value . "\n";
-      }
+    $description .= "--- Guest Information ---\n";
+    $description .= "Name: " . $attendeeName . "\n";
+    $description .= "Email: " . $attendeeEmail . "\n";
+    if ($attendeePhone) $description .= "Phone: " . $attendeePhone . "\n";
+    $description .= "Timezone: " . $attendeeTimezone . "\n\n";
+    
+    $description .= "--- Organizer ---\n";
+    if ($organizerEmail) $description .= $organizerName . " (" . $organizerEmail . ")\n\n";
+    else $description .= $organizerName . "\n\n";
+    
+    if ($location || $videoUrl) {
+      $description .= "--- Meeting Location ---\n";
+      if ($location) $description .= "Location: " . $location . "\n";
+      if ($videoUrl) $description .= "Meeting Link: " . $videoUrl . "\n";
+      $description .= "\n";
     }
     
-    if ($descriptionText) $description .= "\nDescription: " . $descriptionText . "\n";
-    if ($notes) $description .= "\nNotes: " . $notes . "\n";
+    // Process custom responses (includes phone, notes, custom questions)
+    $responses = $payload['responses'] ?? [];
+    $customResponses = [];
+    
+    foreach ($responses as $key => $resp) {
+      // Handle different response formats from Cal.com
+      if (is_array($resp)) {
+        $label = $resp['label'] ?? ucfirst(str_replace('_', ' ', $key));
+        $value = $resp['value'] ?? '';
+        if (is_array($value)) {
+          $value = $value['value'] ?? $value['optionValue'] ?? json_encode($value);
+        }
+      } else {
+        $label = ucfirst(str_replace('_', ' ', $key));
+        $value = $resp;
+      }
+      
+      // Skip empty values and already captured data
+      if (empty($value) || $value === 'N/A') continue;
+      
+      // Capture phone from responses if not already found
+      if (!$attendeePhone && (stripos($key, 'phone') !== false || stripos($label, 'phone') !== false)) {
+        $attendeePhone = $value;
+        continue; // Will be shown in guest info
+      }
+      
+      $customResponses[$label] = $value;
+    }
+    
+    // Add custom responses section if any
+    if (!empty($customResponses)) {
+      $description .= "--- Booking Questions ---\n";
+      foreach ($customResponses as $label => $value) {
+        // Clean up common labels
+        $cleanLabel = preg_replace('/^(your_|please_|enter_)/i', '', $label);
+        $cleanLabel = ucfirst(str_replace('_', ' ', $cleanLabel));
+        $description .= $cleanLabel . ": " . $value . "\n";
+      }
+      $description .= "\n";
+    }
+    
+    if ($descriptionText) $description .= "Description: " . $descriptionText . "\n";
+    if ($notes) $description .= "Additional Notes: " . $notes . "\n";
+    if ($bookingUid) $description .= "\nBooking Ref: " . $bookingUid . "\n";
+    
+    // Update description if phone was found in responses
+    if ($attendeePhone && strpos($description, 'Phone:') === false) {
+      $description = str_replace("Timezone:", "Phone: " . $attendeePhone . "\nTimezone:", $description);
+    }
     
     // Try to find matching lead/contact by email
     $email = $attendeeEmail;
