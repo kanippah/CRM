@@ -3600,6 +3600,11 @@ if (isset($_GET['background'])) {
         ` : ''}
         ${analysisHtml}
         ${call.transcript ? `
+          <div class="form-group">
+            <label>Transcript</label>
+            <div style="background: var(--bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border); max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 12px;">${call.transcript}</div>
+          </div>
+        ` : ''}
         <div style="display: flex; gap: 8px; margin-top: 20px;">
           <button type="button" class="btn secondary" onclick="closeModal()">Close</button>
         </div>
