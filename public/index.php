@@ -334,6 +334,7 @@ function ensure_schema() {
       call_score INTEGER,
       metadata JSONB,
       raw_payload JSONB,
+      recording_url TEXT,
       lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
       contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT now(),
@@ -371,6 +372,7 @@ function ensure_schema() {
     );
     
     ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS booking_uid TEXT;
+    ALTER TABLE retell_calls ADD COLUMN IF NOT EXISTS recording_url TEXT;
     
     CREATE INDEX IF NOT EXISTS idx_calendar_events_start ON calendar_events(start_time);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(event_type);
