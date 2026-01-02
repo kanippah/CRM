@@ -51,10 +51,6 @@ function send_email($to, $subject, $message) {
   // Use SMTP if configured, otherwise fallback to logging in dev environments
   $smtp_configured = !empty($SMTP_HOST) && !empty($SMTP_USER) && !empty($SMTP_PASS);
   
-  if (!$smtp_configured) {
-    error_log("SMTP NOT CONFIGURED: Host=" . ($SMTP_HOST ? 'YES' : 'NO') . ", User=" . ($SMTP_USER ? 'YES' : 'NO') . ", Pass=" . ($SMTP_PASS ? 'YES' : 'NO'));
-  }
-  
   $is_dev_env = (
     getenv('APP_ENV') === 'development' || 
     $_SERVER['HTTP_HOST'] === 'localhost' || 
