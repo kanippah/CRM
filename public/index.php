@@ -1997,7 +1997,7 @@ function api_calendar_list() {
   $userId = $_SESSION['user_id'];
   
   if ($role !== 'admin') {
-    $where_parts[] = "(ce.created_by = :user_id OR ce.assigned_to = :user_id2 OR ce.lead_id IN (SELECT id FROM leads WHERE assigned_to = :user_id3))";
+    $where_parts[] = "(ce.event_type = 'booking' OR ce.created_by = :user_id OR ce.assigned_to = :user_id2 OR ce.lead_id IN (SELECT id FROM leads WHERE assigned_to = :user_id3))";
     $params[':user_id'] = $userId;
     $params[':user_id2'] = $userId;
     $params[':user_id3'] = $userId;
@@ -3838,9 +3838,11 @@ if (isset($_GET['background'])) {
                 <source src="${call.recording_url}" type="audio/wav">
                 Your browser does not support the audio element.
               </audio>
-              <a href="${call.recording_url}" download="recording-${call.retell_call_id}.wav" class="btn" style="background: var(--kt-blue); color: white; text-decoration: none; padding: 8px 15px; font-size: 13px; border-radius: 6px;">
-                Download
-              </a>
+              ${currentUser && currentUser.role === 'admin' ? `
+                <a href="${call.recording_url}" download="recording-${call.retell_call_id}.wav" class="btn" style="background: var(--kt-blue); color: white; text-decoration: none; padding: 8px 15px; font-size: 13px; border-radius: 6px;">
+                  Download
+                </a>
+              ` : ''}
             </div>
           </div>
         ` : ''}
