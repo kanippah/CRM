@@ -49,11 +49,27 @@ function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
   // In development mode, log emails instead of trying to send them
-  $is_dev = (getenv('APP_ENV') === 'development' || $_SERVER['HTTP_HOST'] === 'localhost' || strpos($_SERVER['HTTP_HOST'], '127.0.0') === 0 || strpos($_SERVER['HTTP_HOST'], 'localhost') !== false);
+  $is_dev = (
+    getenv('APP_ENV') === 'development' || 
+    $_SERVER['HTTP_HOST'] === 'localhost' || 
+    strpos($_SERVER['HTTP_HOST'], '127.0.0') === 0 || 
+    strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
+    strpos($_SERVER['HTTP_HOST'], '.replit.app') !== false ||
+    empty($SMTP_HOST)
+  );
   
   if ($is_dev) {
-    error_log("DEV MODE: Email to {$to} - Subject: {$subject}");
-    error_log("DEV MODE: Email body:\n{$message}");
+    error_log("--------------------------------------------------");
+    error_log("📧 DEV MODE EMAIL CAPTURED");
+    error_log("To: {$to}");
+    error_log("Subject: {$subject}");
+    
+    // Extract magic link if present for easier access in console
+    if (preg_match('/href=\'([^\']+)\'/', $message, $matches)) {
+      error_log("🔗 MAGIC LINK: " . $matches[1]);
+    }
+    
+    error_log("--------------------------------------------------");
     return true;
   }
   
