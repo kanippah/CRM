@@ -48,17 +48,20 @@ function normalize_phone($country, $number) {
 function send_email($to, $subject, $message) {
   global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
   
-  // In development mode, log emails instead of trying to send them
-  $is_dev = (
+  // Use SMTP if configured, otherwise fallback to logging in dev environments
+  $smtp_configured = !empty($SMTP_HOST) && !empty($SMTP_USER) && !empty($SMTP_PASS);
+  $is_dev_env = (
     getenv('APP_ENV') === 'development' || 
     $_SERVER['HTTP_HOST'] === 'localhost' || 
     strpos($_SERVER['HTTP_HOST'], '127.0.0') === 0 || 
     strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
-    strpos($_SERVER['HTTP_HOST'], '.replit.app') !== false ||
-    empty($SMTP_HOST)
+    strpos($_SERVER['HTTP_HOST'], '.replit.app') !== false
   );
+
+  // Only use dev mode (logging) if NOT fully configured for SMTP OR if explicitly in development mode
+  $use_dev_mode = (getenv('APP_ENV') === 'development') || (!$smtp_configured && $is_dev_env) || empty($SMTP_HOST);
   
-  if ($is_dev) {
+  if ($use_dev_mode) {
     error_log("--------------------------------------------------");
     error_log("📧 DEV MODE EMAIL CAPTURED");
     error_log("To: {$to}");
