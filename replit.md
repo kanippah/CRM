@@ -119,7 +119,28 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
    - Booking rescheduled
 5. Save the webhook.
 
+### ClickSend SMS Integration (January 5, 2026)
+**Purpose:** Send SMS booking confirmations to customers when they book via Cal.com.
+**Implementation:**
+- Uses ClickSend's **Email-to-SMS gateway** - no API keys required in the CRM
+- When a Cal.com booking is created with a phone number, an SMS is automatically sent
+- SMS is sent by emailing `phonenumber@sms.clicksend.com` using existing SMTP setup
+- Message format: "Hi [FirstName]! Your appointment with Koadi Technology is confirmed for [Date] at [Time]. Check your email for the meeting link. Questions? Reply here."
+
+**Setup Requirements:**
+1. Create a ClickSend account at https://www.clicksend.com
+2. In ClickSend dashboard, go to **SMS > Email SMS**
+3. Click **Add Allowed Addresses** and add your SMTP_USER email address
+4. Ensure Cal.com booking form collects phone numbers from attendees
+
+**Technical Details:**
+- Phone numbers are normalized (non-digits stripped, 10-digit numbers get US country code +1)
+- SMS only sent if booking includes a phone number
+- Development mode logs SMS to console instead of sending
+- Uses plain text content (not HTML) for SMS delivery
+
 ## External Dependencies
 - **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). These variables must be set in production (Coolify).
 - **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication. Configured via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Development mode bypasses SMTP and logs emails instead.
 - **Retell AI:** Voice agent integration via webhook for post-call analysis. Calls are received at `?api=retell.webhook` endpoint.
+- **ClickSend:** SMS notifications via email-to-SMS gateway. Requires ClickSend account with SMTP email added to allowed senders. No API credentials needed in CRM.

@@ -165,6 +165,122 @@ function send_email($to, $subject, $message) {
   return true;
 }
 
+// Send SMS via ClickSend email-to-SMS gateway
+function send_sms($phone, $message) {
+  // Normalize phone number - remove all non-digits
+  $phone = preg_replace('/\D+/', '', $phone);
+  
+  if (empty($phone) || strlen($phone) < 10) {
+    error_log("SMS: Invalid phone number - {$phone}");
+    return false;
+  }
+  
+  // Ensure country code (default to 1 for US/Canada if not present)
+  if (strlen($phone) === 10) {
+    $phone = '1' . $phone;
+  }
+  
+  // ClickSend email-to-SMS gateway
+  $smsEmail = $phone . '@sms.clicksend.com';
+  
+  error_log("SMS: Sending to {$smsEmail}");
+  
+  // Use plain text for SMS (not HTML)
+  global $SMTP_HOST, $SMTP_PORT, $SMTP_USER, $SMTP_PASS;
+  
+  $smtp_configured = !empty($SMTP_HOST) && !empty($SMTP_USER) && !empty($SMTP_PASS);
+  
+  $is_dev_env = (
+    getenv('APP_ENV') === 'development' || 
+    $_SERVER['HTTP_HOST'] === 'localhost' || 
+    strpos($_SERVER['HTTP_HOST'], '127.0.0') === 0 || 
+    strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
+    strpos($_SERVER['HTTP_HOST'], '.replit.app') !== false
+  );
+
+  $use_dev_mode = (getenv('APP_ENV') === 'development') || (!$smtp_configured && $is_dev_env) || empty($SMTP_HOST);
+  
+  if ($use_dev_mode) {
+    error_log("--------------------------------------------------");
+    error_log("📱 DEV MODE SMS CAPTURED");
+    error_log("To: {$phone}");
+    error_log("Message: {$message}");
+    error_log("--------------------------------------------------");
+    return true;
+  }
+  
+  $context = stream_context_create([
+    'ssl' => [
+      'verify_peer' => false,
+      'verify_peer_name' => false,
+      'allow_self_signed' => true
+    ]
+  ]);
+  
+  $socket = @stream_socket_client(
+    'ssl://' . $SMTP_HOST . ':' . $SMTP_PORT,
+    $errno,
+    $errstr,
+    30,
+    STREAM_CLIENT_CONNECT,
+    $context
+  );
+  
+  if (!$socket) {
+    error_log("SMS SMTP: Connection failed - errno: {$errno}, error: {$errstr}");
+    return false;
+  }
+  
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "EHLO " . $SMTP_HOST . "\r\n");
+  do {
+    $response = fgets($socket, 515);
+  } while (preg_match('/^250-/', $response));
+  
+  fputs($socket, "AUTH LOGIN\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, base64_encode($SMTP_USER) . "\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, base64_encode($SMTP_PASS) . "\r\n");
+  $response = fgets($socket, 515);
+  
+  if (strpos($response, '235') === false) {
+    error_log("SMS SMTP: Authentication failed!");
+    fclose($socket);
+    return false;
+  }
+  
+  fputs($socket, "MAIL FROM: <{$SMTP_USER}>\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "RCPT TO: <{$smsEmail}>\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "DATA\r\n");
+  $response = fgets($socket, 515);
+  
+  $headers = "From: Koadi Technology <{$SMTP_USER}>\r\n";
+  $headers .= "MIME-Version: 1.0\r\n";
+  $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+  $headers .= "Subject: SMS\r\n";
+  
+  fputs($socket, "To: {$smsEmail}\r\n");
+  fputs($socket, $headers);
+  fputs($socket, "\r\n");
+  fputs($socket, $message . "\r\n");
+  fputs($socket, ".\r\n");
+  $response = fgets($socket, 515);
+  
+  fputs($socket, "QUIT\r\n");
+  fclose($socket);
+  
+  error_log("SMS: Sent successfully to {$phone}");
+  return true;
+}
+
 function ensure_schema() {
   $pdo = db();
   $pdo->exec(<<<SQL
@@ -2330,6 +2446,23 @@ function api_cal_webhook() {
       ':location' => $prettyLocation ?: $location,
       ':booking_uid' => $bookingUid
     ]);
+    
+    // Send SMS confirmation via ClickSend email-to-SMS gateway
+    if ($attendeePhone) {
+      // Format date/time for SMS
+      $smsDate = date('M j, Y', strtotime($startTime));
+      $smsTime = date('g:i A', strtotime($startTime));
+      
+      // Get first name only for friendly greeting
+      $firstName = explode(' ', $attendeeName)[0];
+      
+      $smsMessage = "Hi {$firstName}! Your appointment with Koadi Technology is confirmed for {$smsDate} at {$smsTime}. Check your email for the meeting link. Questions? Reply here.";
+      
+      $smsSent = send_sms($attendeePhone, $smsMessage);
+      error_log("Cal.com booking SMS: " . ($smsSent ? "Sent" : "Failed") . " to {$attendeePhone}");
+    } else {
+      error_log("Cal.com booking: No phone number provided, skipping SMS");
+    }
   }
   
   // Handle booking confirmation
