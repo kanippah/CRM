@@ -78,7 +78,8 @@ A multi-tenant SaaS platform that provides AI voice agent services with integrat
 | `monthly_fee` | Monthly subscription fee | $0.00 |
 | `low_balance_alert` | Alert threshold | $10.00 |
 | `webhook_url` | Customer's webhook endpoint | null |
-| `timezone` | Customer's timezone | UTC |
+
+**Note:** All times are displayed in the user's local browser timezone automatically. No timezone configuration needed.
 
 #### 1.3 Customer Users
 - Add/remove users
@@ -458,7 +459,6 @@ CREATE TABLE customers (
     api_key VARCHAR(64) UNIQUE NOT NULL,
     webhook_url TEXT,
     webhook_secret VARCHAR(64),
-    timezone VARCHAR(50) DEFAULT 'UTC',
     status VARCHAR(20) DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -813,6 +813,35 @@ voice-ai-platform/
 ├── run.py
 └── README.md
 ```
+
+---
+
+## Timezone Handling
+
+**Principle:** All times displayed in the user's local browser timezone.
+
+**Implementation:**
+- **Database Storage:** All timestamps stored in UTC (TIMESTAMPTZ)
+- **API Responses:** Return timestamps in ISO8601 UTC format (e.g., `2026-01-15T14:30:00Z`)
+- **Frontend Display:** JavaScript converts UTC to local browser timezone using `Intl.DateTimeFormat` or `toLocaleString()`
+- **User Input:** When users select dates/times (e.g., booking), convert from local to UTC before sending to server
+
+**Examples:**
+```javascript
+// Display UTC timestamp in local timezone
+const utcTime = "2026-01-15T14:30:00Z";
+const localDisplay = new Date(utcTime).toLocaleString();
+
+// Convert local input to UTC for API
+const localInput = new Date("2026-01-15 09:30");
+const utcForApi = localInput.toISOString();
+```
+
+**Benefits:**
+- Users see times in their own timezone automatically
+- No timezone configuration needed per user
+- Consistent storage format in database
+- Works correctly across different timezones
 
 ---
 
