@@ -442,6 +442,11 @@ function ensure_schema() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='industry') THEN
         ALTER TABLE contacts ADD COLUMN industry TEXT;
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='can_manage_global_leads') THEN
+        ALTER TABLE users ADD COLUMN can_manage_global_leads BOOLEAN DEFAULT FALSE;
+        -- Set admins to TRUE by default
+        UPDATE users SET can_manage_global_leads = TRUE WHERE role = 'admin';
+      END IF;
     END $$;
     
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
@@ -715,7 +720,8 @@ function api_session() {
       'id' => $_SESSION['user_id'],
       'username' => $_SESSION['username'],
       'full_name' => $_SESSION['full_name'],
-      'role' => $_SESSION['role']
+      'role' => $_SESSION['role'],
+      'can_manage_global_leads' => !empty($_SESSION['can_manage_global_leads'])
     ]]);
   } elseif (isset($_COOKIE['remember_token'])) {
     $pdo = db();
@@ -734,12 +740,14 @@ function api_session() {
         $_SESSION['email'] = $user['email'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['role'] = $user['role'];
+        $_SESSION['can_manage_global_leads'] = !empty($user['can_manage_global_leads']);
         
         respond(['user' => [
           'id' => $user['id'],
           'username' => $user['username'],
           'full_name' => $user['full_name'],
-          'role' => $user['role']
+          'role' => $user['role'],
+          'can_manage_global_leads' => !empty($user['can_manage_global_leads'])
         ]]);
       }
     }
@@ -786,13 +794,15 @@ function api_verify_magic_link() {
           $_SESSION['email'] = $user['email'];
           $_SESSION['full_name'] = $user['full_name'];
           $_SESSION['role'] = $user['role'];
+          $_SESSION['can_manage_global_leads'] = !empty($user['can_manage_global_leads']);
           
           respond(['ok' => true, 'user' => [
             'id' => $user['id'],
             'username' => $user['username'],
             'email' => $user['email'],
             'full_name' => $user['full_name'],
-            'role' => $user['role']
+            'role' => $user['role'],
+            'can_manage_global_leads' => !empty($user['can_manage_global_leads'])
           ]]);
         }
       } elseif ($type === 'invite') {
@@ -985,18 +995,21 @@ function api_accept_invite() {
       $pdo->prepare("DELETE FROM magic_links WHERE id = :id")->execute([':id' => $invite['id']]);
       
       // Auto-login the user
+      $is_admin = $invite['role'] === 'admin';
       $_SESSION['user_id'] = $newUser['id'];
       $_SESSION['username'] = $username;
       $_SESSION['email'] = $invite['email'];
       $_SESSION['full_name'] = $full_name;
       $_SESSION['role'] = $invite['role'];
+      $_SESSION['can_manage_global_leads'] = $is_admin; // Admins get this by default, sales users don't
       
       respond(['ok' => true, 'auto_login' => true, 'user' => [
         'id' => $newUser['id'],
         'username' => $username,
         'email' => $invite['email'],
         'full_name' => $full_name,
-        'role' => $invite['role']
+        'role' => $invite['role'],
+        'can_manage_global_leads' => $is_admin
       ]]);
     }
   }
@@ -1007,7 +1020,7 @@ function api_accept_invite() {
 function api_users_list() {
   require_admin();
   $pdo = db();
-  $users = $pdo->query("SELECT id, username, email, full_name, role, status, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
+  $users = $pdo->query("SELECT id, username, email, full_name, role, status, can_manage_global_leads, created_at, 'user' as type FROM users ORDER BY id DESC")->fetchAll();
   $invites = $pdo->query("SELECT id, email, role, created_at, 'invite' as type, expires_at FROM magic_links WHERE type = 'invite' AND expires_at > NOW() ORDER BY id DESC")->fetchAll();
   
   $combined = array_merge($users, $invites);
@@ -1023,6 +1036,12 @@ function api_users_save() {
   $email = trim($b['email'] ?? '');
   $full_name = trim($b['full_name'] ?? '');
   $role = $b['role'] ?? 'sales';
+  $can_manage_global_leads = isset($b['can_manage_global_leads']) ? ($b['can_manage_global_leads'] ? true : false) : false;
+  
+  // Admins always have global leads permission
+  if ($role === 'admin') {
+    $can_manage_global_leads = true;
+  }
   
   // Auto-generate username from email (keep for backward compatibility)
   $username = explode('@', $email)[0];
@@ -1047,8 +1066,8 @@ function api_users_save() {
   }
   
   if ($id) {
-    $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r WHERE id=:id RETURNING id, username, email, full_name, role, status");
-    $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':id' => $id]);
+    $stmt = $pdo->prepare("UPDATE users SET email=:e, username=:u, full_name=:n, role=:r, can_manage_global_leads=:cgl WHERE id=:id RETURNING id, username, email, full_name, role, status, can_manage_global_leads");
+    $stmt->execute([':e' => $email, ':u' => $username, ':n' => $full_name, ':r' => $role, ':cgl' => $can_manage_global_leads, ':id' => $id]);
     $user = $stmt->fetch();
   } else {
     respond(['error' => 'New users must be created through invitations'], 400);
@@ -1189,11 +1208,14 @@ function api_leads_save() {
     }
   }
   
+  // Check if user can create global leads
+  $can_create_global = $_SESSION['role'] === 'admin' || !empty($_SESSION['can_manage_global_leads']);
+  
   if ($id) {
     $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, industry=:i, updated_at=now() WHERE id=:id RETURNING *");
     $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry, ':id' => $id]);
   } else {
-    if ($_SESSION['role'] === 'admin') {
+    if ($can_create_global) {
       $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, industry, status) VALUES (:n, :p, :e, :c, :a, :i, 'global') RETURNING *");
       $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry]);
     } else {
@@ -5073,6 +5095,8 @@ if (isset($_GET['background'])) {
     }
     
     function showUserForm(user) {
+      const isSales = user?.role === 'sales';
+      const canManageGlobal = user?.can_manage_global_leads;
       showModal(`
         <h3>${user ? 'Edit User' : 'Add User'}</h3>
         <form onsubmit="saveUser(event, ${user ? user.id : 'null'})">
@@ -5086,15 +5110,33 @@ if (isset($_GET['background'])) {
           </div>
           <div class="form-group">
             <label>Role *</label>
-            <select name="role" required>
+            <select name="role" required onchange="toggleGlobalLeadsOption(this)">
               <option value="sales" ${user?.role === 'sales' ? 'selected' : ''}>Sales</option>
               <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
+          </div>
+          <div class="form-group global-leads-option" id="globalLeadsOption" style="${!isSales ? 'display:none;' : ''}">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" name="can_manage_global_leads" ${canManageGlobal ? 'checked' : ''} style="width: auto;">
+              <span>Allow adding leads to global pool</span>
+            </label>
+            <small style="color: var(--muted); display: block; margin-top: 5px;">
+              When enabled, this sales user can create leads visible to all users (like admins)
+            </small>
           </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
         </form>
       `);
+    }
+    
+    function toggleGlobalLeadsOption(select) {
+      const optionDiv = document.getElementById('globalLeadsOption');
+      if (select.value === 'admin') {
+        optionDiv.style.display = 'none';
+      } else {
+        optionDiv.style.display = 'block';
+      }
     }
     
     async function saveUser(e, id) {
@@ -5113,7 +5155,8 @@ if (isset($_GET['background'])) {
         id,
         email: email,
         full_name: form.full_name.value,
-        role: form.role.value
+        role: form.role.value,
+        can_manage_global_leads: form.can_manage_global_leads?.checked || false
       };
       
       try {
