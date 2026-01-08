@@ -17,130 +17,31 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Kanban:** Implements a drag-and-drop Kanban board for project visualization, with color-coded, fixed-width cards featuring text truncation.
 
 **Technical Implementations:**
-- **Authentication:** Passwordless magic link authentication with role-based access (Admin/Sales). Users enter only their email to receive a secure login link valid for 10 minutes. No passwords are stored or required. Magic links are single-use and automatically deleted after verification.
-- **User Management:** Passwordless invitation system where admin invites users by email and role only. Invited users receive a magic link (valid 24 hours) and only need to provide their full name to complete registration - no password required. Features include user deactivation/activation without deletion. Admin can delete pending invitations that haven't been accepted. Admin user editing (email, name, role) does not involve passwords - pure passwordless authentication throughout.
-- **Contact Management:** Includes duplicate detection based on normalized phone numbers and case-insensitive company names. Supports contact types (Individual/Company). Admin view includes "Assigned To" column showing contact ownership, reassignment capability, and clickable contact names for detailed view (includes call history and projects). Industry field allows categorization with custom industry management. All contacts automatically assigned to creating user. Sales users can return contacts to leads pool for re-nurturing.
-- **Call Tracking:** Allows logging calls with outcomes, duration, and associated contacts. Features call updates for chronological note-taking. Latest update displayed in notes column with 50-character truncation and tooltip for full text. Sales users can add updates and edit calls but cannot delete (admin-only). Clickable contact names to view full call history.
-- **Project Pipeline:** Visual Kanban board with 5 stages (Lead, Qualified, Proposal, Negotiation, Won) supporting drag-and-drop stage updates.
-- **Lead Management:** Supports both global (admin-created) and personal (sales user-created/grabbed) leads. Features bidirectional lead-contact conversion with automatic data parsing and source tracking. Includes pagination (20 leads per page) and industry filter for efficient browsing. Admin view includes industry column, clickable lead names for detailed interaction view, and all lead actions (Edit/Assign/Delete) accessible through view modal. Sales users can convert leads to contacts and contacts back to leads. Page state, tab selection, industry filter, and pagination position persist on browser refresh.
-- **Industry Management:** Admin-only industry management system with 16 default categories (Technology, Healthcare, Finance, Manufacturing, Retail, Education, Real Estate, Construction, Transportation, Hospitality, Media, Legal, Insurance, Energy, Agriculture, Non-Profit). Admins can add custom industries and delete unused ones. Industries can be assigned to both leads and contacts.
-- **Settings:** Admin-only section for setting default country codes, managing industries, data export/import (JSON with leads and industry data), and database reset functionality.
-- **Database Schema:** Utilizes PostgreSQL with specific tables for Users, Password Resets, Invitations, Contacts, Calls, Call Updates, Projects, Settings, Leads, Industries, and Interactions. Tables include necessary indexes for performance. Auto-migration system ensures schema updates on app startup.
-- **API Endpoints:** A comprehensive set of API endpoints for all CRUD operations and specific functionalities like authentication, session management, lead conversion, project stage updates, contact reassignment, invitation management, and industry management.
+- **Authentication:** Passwordless magic link authentication with role-based access (Admin/Sales).
+- **User Management:** Passwordless invitation system for admin to invite users by email and role. Includes user deactivation/activation and deletion of pending invitations.
+- **Contact Management:** Includes duplicate detection, supports contact types (Individual/Company), and allows reassignment. Sales users can return contacts to the leads pool.
+- **Call Tracking:** Allows logging calls with outcomes, duration, and associated contacts. Supports call updates for chronological note-taking.
+- **Project Pipeline:** Visual Kanban board with 5 stages (Lead, Qualified, Proposal, Negotiation, Won) supporting drag-and-drop updates.
+- **Lead Management:** Supports global (admin-created) and personal (sales user-created/grabbed) leads with bidirectional lead-contact conversion and source tracking. Features pagination and industry filtering.
+- **Industry Management:** Admin-only system for managing and assigning industries to leads and contacts.
+- **Settings:** Admin-only section for default country codes, industry management, data export/import (JSON), and database reset.
+- **AI Calls Monitoring:** Receives and displays post-call analysis from Retell AI voice agents via a webhook. Includes a dedicated monitoring page with filtering, search, and detailed call views (transcript, score, recommendations).
+- **Calendar System:** Provides monthly and weekly views, supports event creation, and color-codes events (AI calls, bookings, schedules). Automatically integrates AI calls and Cal.com bookings.
+- **Cal.com Integration:** Receives booking events via webhook for various statuses (created, confirmed, cancelled, rescheduled). Automatically matches bookings to leads/contacts and integrates them into the calendar.
+- **ClickSend SMS Integration:** Automatically sends SMS booking confirmations using ClickSend's Email-to-SMS gateway for Cal.com bookings with phone numbers.
+- **Global Leads Permission:** Allows admins to grant specific sales users the ability to create global leads.
 
 **System Design Choices:**
-- **Single-file PHP:** All application logic resides within `public/index.php` for simplified deployment and management.
-- **Vanilla JavaScript:** Client-side interactivity is handled using vanilla JavaScript, avoiding external frameworks.
+- **Single-file PHP:** All application logic resides within `public/index.php`.
+- **Vanilla JavaScript:** Client-side interactivity is handled using vanilla JavaScript.
 - **CSS:** Styling employs custom CSS properties for theming flexibility.
-- **Deployment:** Docker support is included via a `Dockerfile` for containerized deployments (e.g., Coolify), running on PHP 8.2 CLI with PostgreSQL extensions.
-
-## Recent Fixes (December 14, 2025)
-
-### 1. Fixed Magic Link Expiration Issue (Coolify)
-**Problem:** Magic links were always expired when verified in Coolify production environment.
-**Root Cause:** Timezone confusion during timestamp comparison.
-**Solution:** Simplified all queries to use `now()` for timestamp comparison:
-- Link creation: Uses `now() + INTERVAL '10 minutes'` for login links
-- Link creation: Uses `now() + INTERVAL '24 hours'` for invitation links
-- Link verification: Simple comparison `expires_at > now()`
-- Since `expires_at` is stored as TIMESTAMPTZ (absolute time), PostgreSQL correctly handles comparison regardless of server timezone
-- Applies to: Login links (10 min), Invitation links (24 hrs), Password reset links (1 hr)
-
-### 2. Fixed Email Sending in Development
-**Problem:** Dev environment was failing SMTP connections to `mail.koaditech.com:465` (no internet).
-**Solution:** Added dev mode detection that logs emails instead of sending them:
-- Dev detection checks: `APP_ENV=development`, localhost, or 127.0.x.x
-- In dev: emails are logged to PHP error log with full content
-- In production: SMTP sending works as before
-- Allows testing magic link functionality in dev without email infrastructure
-
-## Recent Features (December 30, 2025)
-
-### Retell AI Voice Agent Integration
-**Purpose:** Receive and display post-call analysis from Retell AI voice agents.
-**Implementation:**
-- **Webhook Endpoint:** `?api=retell.webhook` receives POST data from Retell AI after each call
-- **Security:** HMAC SHA-256 signature verification using `x-retell-signature` header. Retell API Key configurable in Settings (Admin only). Signature validation is currently in debug mode (logging mismatches but accepting requests).
-- **Data Captured:** call_id, agent_id, direction (inbound/outbound), caller phone, duration, transcript, analysis results, call summary, improvement recommendations, call score
-- **Automatic Matching:** Incoming calls are automatically matched to existing leads/contacts by phone number
-- **Calendar Integration:** Each AI call automatically creates a calendar event
-
-### AI Calls Monitoring Page
-**Features:**
-- List view of all AI voice agent calls with pagination
-- Filter by direction (inbound/outbound) and search
-- Call cards show caller number, duration, date, and summary preview
-- Detailed view includes: transcript, call score (color-coded), improvement recommendations, analysis results
-- Accessible via "AI Calls" in sidebar and bottom mobile navigation
-
-### Calendar System
-**Features:**
-- Monthly and weekly views with navigation
-- Color-coded events: Orange for AI calls, Blue for bookings, Green for schedules
-- Click on any day to add a new event
-- Event types: Booking, Schedule, Meeting
-- AI calls from Retell automatically appear on the calendar
-- Events linked to leads and contacts when applicable
-
-### New Database Tables
-- **retell_calls:** Stores all Retell AI call data including transcripts, analysis, and recommendations
-- **calendar_events:** Stores all calendar events with polymorphic links to leads, contacts, and AI calls
-
-### New API Endpoints
-- `retell.webhook` - Webhook receiver for Retell AI (no auth required)
-- `retell_calls.list` - List all AI calls with pagination and filters
-- `retell_calls.get` - Get single AI call details
-- `calendar.list` - List calendar events by date range
-- `calendar.save` - Create/update calendar events
-- `calendar.delete` - Delete calendar events
-
-### Cal.com Integration
-**Purpose:** Receive and display bookings made via Cal.com with full lifecycle tracking.
-**Implementation:**
-- **Webhook Endpoint:** `?api=cal.webhook` receives POST data from Cal.com for booking events.
-- **Supported Events:**
-  - `BOOKING_CREATED` - New booking is made (status: always confirmed)
-  - `BOOKING_CONFIRMED` - Booking is confirmed (updates status to confirmed)
-  - `BOOKING_CANCELLED` - Booking is cancelled (updates status to cancelled, color changes to red)
-  - `BOOKING_RESCHEDULED` - Booking time is changed (updates times and status to rescheduled)
-- **Data Captured:** Event title, attendee name/email/phone/timezone, organizer name/email, start/end time, location, meeting link (video URL from multiple sources), booking reference (UID), custom form responses (including "What is this meeting about?"), additional notes, cancellation/reschedule reasons. Debug logging captures full webhook payload for troubleshooting.
-- **Automatic Matching:** Incoming bookings are automatically matched to existing leads/contacts by email.
-- **Calendar Integration:** Each Cal.com booking automatically creates a 'booking' type event in the calendar (displayed in blue, cancelled in red).
-- **Status Tracking:** Bookings show their current status (pending, confirmed, cancelled, rescheduled) with visual indicators.
-
-### Webhook Setup Instructions (Cal.com)
-1. In your Cal.com dashboard, go to Settings → Webhooks.
-2. Click "Add new webhook".
-3. Set the Payload URL to: `https://your-domain.com/?api=cal.webhook`.
-4. Select these event triggers:
-   - Booking created
-   - Booking confirmed (if you use confirmation workflows)
-   - Booking cancelled
-   - Booking rescheduled
-5. Save the webhook.
-
-### ClickSend SMS Integration (January 5, 2026)
-**Purpose:** Send SMS booking confirmations to customers when they book via Cal.com.
-**Implementation:**
-- Uses ClickSend's **Email-to-SMS gateway** - no API keys required in the CRM
-- When a Cal.com booking is created with a phone number, an SMS is automatically sent
-- SMS is sent by emailing `phonenumber@sms.clicksend.com` using existing SMTP setup
-- Message format: "Hi [FirstName]! Your appointment with Koadi Technology is confirmed for [Date] at [Time]. Check your email for the meeting link. Questions? Reply here."
-
-**Setup Requirements:**
-1. Create a ClickSend account at https://www.clicksend.com
-2. In ClickSend dashboard, go to **SMS > Email SMS**
-3. Click **Add Allowed Addresses** and add your SMTP_USER email address
-4. Ensure Cal.com booking form collects phone numbers from attendees
-
-**Technical Details:**
-- Phone numbers are normalized (non-digits stripped, 10-digit numbers get US country code +1)
-- SMS only sent if booking includes a phone number
-- Development mode logs SMS to console instead of sending
-- Uses plain text content (not HTML) for SMS delivery
+- **Deployment:** Docker support is included via a `Dockerfile` for containerized deployments, running on PHP 8.2 CLI with PostgreSQL extensions.
+- **Database Schema:** Utilizes PostgreSQL with tables for Users, Contacts, Calls, Projects, Leads, Industries, Retell Calls, and Calendar Events. Includes an auto-migration system.
+- **API Endpoints:** A comprehensive set of API endpoints for CRUD operations and specific functionalities, including webhook receivers for Retell AI and Cal.com.
 
 ## External Dependencies
-- **PostgreSQL:** The core database for all CRM data, utilizing Replit-managed PostgreSQL via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`). These variables must be set in production (Coolify).
-- **SMTP Service:** Integrated for sending emails related to user invitations and magic link authentication. Configured via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Development mode bypasses SMTP and logs emails instead.
-- **Retell AI:** Voice agent integration via webhook for post-call analysis. Calls are received at `?api=retell.webhook` endpoint.
-- **ClickSend:** SMS notifications via email-to-SMS gateway. Requires ClickSend account with SMTP email added to allowed senders. No API credentials needed in CRM.
+- **PostgreSQL:** The core database for all CRM data, configured via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
+- **SMTP Service:** Integrated for sending emails (invitations, magic links) via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`).
+- **Retell AI:** Voice agent integration via webhook for post-call analysis, received at `?api=retell.webhook`.
+- **ClickSend:** SMS notifications via email-to-SMS gateway for Cal.com booking confirmations.
+- **Cal.com:** Booking platform integration via webhook for event lifecycle tracking, received at `?api=cal.webhook`.
