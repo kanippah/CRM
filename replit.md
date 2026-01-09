@@ -39,6 +39,9 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Database Schema:** Utilizes PostgreSQL with tables for Users, Contacts, Calls, Projects, Leads, Industries, Retell Calls, and Calendar Events. Includes an auto-migration system.
 - **API Endpoints:** A comprehensive set of API endpoints for CRUD operations and specific functionalities, including webhook receivers for Retell AI and Cal.com.
 
+## Documentation
+- **Full MVP Specification:** See `docs/MVP_CRM_SPECIFICATION.md` for comprehensive documentation including database schema, all 50+ API endpoints, webhook specifications, business logic flows, and deployment instructions.
+
 ## External Dependencies
 - **PostgreSQL:** The core database for all CRM data, configured via environment variables (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`).
 - **SMTP Service:** Integrated for sending emails (invitations, magic links) via environment variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`).
