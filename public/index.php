@@ -7061,11 +7061,11 @@ if (isset($_GET['background'])) {
       if (items.length === 0) {
         htmlContent = '<p style="color: var(--muted); padding: 20px; text-align: center;">No pending leads to review. Upload an Outscraper file to get started.</p>';
       } else {
-        htmlContent += `<p style="margin-bottom: 12px; font-size: 14px; padding: 0 4px;">Found <strong>${items.length}</strong> leads pending review.</p>`;
+        htmlContent += `<p style="margin-bottom: 12px; font-size: 14px;">Found <strong>${items.length}</strong> leads pending review.</p>`;
         
         if (batches.length > 1) {
           htmlContent += `
-            <div style="margin-bottom: 16px; padding: 0 4px;">
+            <div style="margin-bottom: 16px;">
               <label style="font-size: 13px; font-weight: 500; display: block; margin-bottom: 4px;">Filter by batch:</label>
               <select id="stagingBatchFilter" onchange="filterStagingBatch(this.value)" style="width: 100%; max-width: 300px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px;">
                 <option value="">All batches</option>
@@ -7075,65 +7075,74 @@ if (isset($_GET['background'])) {
         }
         
         htmlContent += `
-          <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); overflow: hidden;">
-            <div style="overflow: auto; flex: 1;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px;">
-                <thead style="position: sticky; top: 0; background: var(--bg); z-index: 10; box-shadow: 0 1px 0 var(--border);">
-                  <tr>
-                    <th style="padding: 12px 8px; text-align: center; width: 40px;"><input type="checkbox" id="selectAllStaging" onchange="toggleAllStaging(this.checked)"></th>
-                    <th style="padding: 12px 8px; text-align: left; width: 200px;">Company</th>
-                    <th style="padding: 12px 8px; text-align: left; width: 140px;">Phone</th>
-                    <th style="padding: 12px 8px; text-align: left; width: 180px;">Email</th>
-                    <th style="padding: 12px 8px; text-align: left; width: 120px;">Industry</th>
-                    <th style="padding: 12px 8px; text-align: left;">Address</th>
+          <div style="flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead style="position: sticky; top: 0; background: var(--bg); z-index: 10;">
+                <tr style="border-bottom: 2px solid var(--border);">
+                  <th style="padding: 10px 6px; text-align: center; width: 35px;"><input type="checkbox" id="selectAllStaging" onchange="toggleAllStaging(this.checked)"></th>
+                  <th style="padding: 10px 6px; text-align: left;">Company</th>
+                  <th style="padding: 10px 6px; text-align: left;">Phone</th>
+                  <th style="padding: 10px 6px; text-align: left;">Email</th>
+                  <th style="padding: 10px 6px; text-align: left;">Industry</th>
+                  <th style="padding: 10px 6px; text-align: center;">Rating</th>
+                  <th style="padding: 10px 6px; text-align: center;">Reviews</th>
+                  <th style="padding: 10px 6px; text-align: left;">Website</th>
+                  <th style="padding: 10px 6px; text-align: left;">Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(item => `
+                  <tr style="border-bottom: 1px solid var(--border);" data-batch="${item.batch_id}" class="staging-row">
+                    <td style="padding: 8px 6px; text-align: center;"><input type="checkbox" class="staging-checkbox" value="${item.id}"></td>
+                    <td style="padding: 8px 6px; font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.name || ''}">${item.name || '-'}</td>
+                    <td style="padding: 8px 6px; white-space: nowrap;">${item.phone || '-'}</td>
+                    <td style="padding: 8px 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kt-blue);" title="${item.email || ''}">${item.email || '-'}</td>
+                    <td style="padding: 8px 6px;"><span style="background: var(--bg); padding: 2px 6px; border-radius: 10px; font-size: 11px; white-space: nowrap;">${item.industry || '-'}</span></td>
+                    <td style="padding: 8px 6px; text-align: center;">${item.rating ? '⭐ ' + parseFloat(item.rating).toFixed(1) : '-'}</td>
+                    <td style="padding: 8px 6px; text-align: center;">${item.reviews_count || '-'}</td>
+                    <td style="padding: 8px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.website || ''}">${item.website ? `<a href="${item.website}" target="_blank" style="color: var(--kt-blue);">View</a>` : '-'}</td>
+                    <td style="padding: 8px 6px; font-size: 11px; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.address || ''}">${item.address || '-'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  ${items.map(item => `
-                    <tr style="border-bottom: 1px solid var(--border);" data-batch="${item.batch_id}" class="staging-row">
-                      <td style="padding: 10px 8px; text-align: center;"><input type="checkbox" class="staging-checkbox" value="${item.id}"></td>
-                      <td style="padding: 10px 8px; font-weight: 500;">${item.name || '-'}</td>
-                      <td style="padding: 10px 8px; white-space: nowrap;">${item.phone || '-'}</td>
-                      <td style="padding: 10px 8px; color: var(--kt-blue); text-decoration: underline; cursor: default;">${item.email || '-'}</td>
-                      <td style="padding: 10px 8px;"><span style="background: var(--bg); padding: 2px 8px; border-radius: 12px; font-size: 11px; white-space: nowrap; border: 1px solid var(--border);">${item.industry || '-'}</span></td>
-                      <td style="padding: 10px 8px; font-size: 12px; color: var(--muted); line-height: 1.4;">${item.address || '-'}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
+                `).join('')}
+              </tbody>
+            </table>
           </div>`;
       }
       
+      // Close any existing staging modal first
+      const existingModal = document.getElementById('outscraperStagingModal');
+      if (existingModal) existingModal.remove();
+      
       const modal = document.createElement('div');
-      modal.className = 'modal-overlay';
       modal.id = 'outscraperStagingModal';
-      modal.style.zIndex = '9999';
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
       modal.innerHTML = `
-        <div class="modal" style="max-width: 1200px; width: 95vw; height: 85vh; max-height: 900px; display: flex; flex-direction: column; padding: 24px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
-            <h2 style="margin: 0; font-size: 20px;">Review Outscraper Leads</h2>
-            <button class="btn secondary" style="padding: 4px 8px;" onclick="document.getElementById('outscraperStagingModal').remove()">✕</button>
+        <div style="background: var(--panel); border-radius: 12px; max-width: 1400px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border);">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 600;">Review Outscraper Leads</h2>
+            <button style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted); padding: 0; line-height: 1;" onclick="document.getElementById('outscraperStagingModal').remove()">&times;</button>
           </div>
           
-          <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
+          <div style="flex: 1; overflow: hidden; padding: 20px 24px; display: flex; flex-direction: column; min-height: 0;">
             ${htmlContent}
           </div>
           
-          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; align-items: center;">
-            <div style="display: flex; gap: 12px;">
+          <div style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; align-items: center; background: var(--bg); border-radius: 0 0 12px 12px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               ${items.length > 0 ? `
                 <button class="btn" style="background: var(--kt-blue); color: white;" onclick="approveSelectedStaging()">✓ Approve Selected</button>
-                <button class="btn" style="background: var(--success); color: white;" onclick="approveAllStaging()">✓ Approve All</button>
-                <button class="btn danger" onclick="rejectSelectedStaging()">✗ Reject Selected</button>
+                <button class="btn" style="background: #28a745; color: white;" onclick="approveAllStaging()">✓ Approve All</button>
+                <button class="btn" style="background: #dc3545; color: white;" onclick="rejectSelectedStaging()">✗ Reject Selected</button>
               ` : ''}
             </div>
             <button class="btn secondary" onclick="document.getElementById('outscraperStagingModal').remove()">Close</button>
           </div>
         </div>
         <style>
-          .staging-row:hover { background: var(--bg) !important; }
-          .staging-checkbox { cursor: pointer; width: 16px; height: 16px; }
+          #outscraperStagingModal .staging-row:hover { background: var(--bg) !important; }
+          #outscraperStagingModal .staging-checkbox { cursor: pointer; width: 16px; height: 16px; }
+          #outscraperStagingModal table { table-layout: auto; }
         </style>
       `;
       document.body.appendChild(modal);
