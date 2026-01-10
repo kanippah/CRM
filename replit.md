@@ -30,14 +30,15 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Cal.com Integration:** Receives booking events via webhook for various statuses (created, confirmed, cancelled, rescheduled). Automatically matches bookings to leads/contacts and integrates them into the calendar.
 - **ClickSend SMS Integration:** Automatically sends SMS booking confirmations using ClickSend's Email-to-SMS gateway for Cal.com bookings with phone numbers.
 - **Global Leads Permission:** Allows admins to grant specific sales users the ability to create global leads.
+- **Outscraper Lead Generation:** Receives lead data via webhook from Outscraper.com (Google Maps scraping). Supports intelligent field mapping, multiple phone/email storage, deduplication via Google Place ID, and import tracking.
 
 **System Design Choices:**
 - **Single-file PHP:** All application logic resides within `public/index.php`.
 - **Vanilla JavaScript:** Client-side interactivity is handled using vanilla JavaScript.
 - **CSS:** Styling employs custom CSS properties for theming flexibility.
 - **Deployment:** Docker support is included via a `Dockerfile` for containerized deployments, running on PHP 8.2 CLI with PostgreSQL extensions.
-- **Database Schema:** Utilizes PostgreSQL with tables for Users, Contacts, Calls, Projects, Leads, Industries, Retell Calls, and Calendar Events. Includes an auto-migration system.
-- **API Endpoints:** A comprehensive set of API endpoints for CRUD operations and specific functionalities, including webhook receivers for Retell AI and Cal.com.
+- **Database Schema:** Utilizes PostgreSQL with tables for Users, Contacts, Calls, Projects, Leads, Industries, Retell Calls, Calendar Events, and Outscraper Imports. Includes an auto-migration system.
+- **API Endpoints:** A comprehensive set of API endpoints for CRUD operations and specific functionalities, including webhook receivers for Retell AI, Cal.com, and Outscraper.
 
 ## Documentation
 - **Full MVP Specification:** See `docs/MVP_CRM_SPECIFICATION.md` for comprehensive documentation including database schema, all 50+ API endpoints, webhook specifications, business logic flows, and deployment instructions.
@@ -48,3 +49,4 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Retell AI:** Voice agent integration via webhook for post-call analysis, received at `?api=retell.webhook`.
 - **ClickSend:** SMS notifications via email-to-SMS gateway for Cal.com booking confirmations.
 - **Cal.com:** Booking platform integration via webhook for event lifecycle tracking, received at `?api=cal.webhook`.
+- **Outscraper:** Lead generation integration via webhook for automated Google Maps business data import, received at `?api=outscraper.webhook`.

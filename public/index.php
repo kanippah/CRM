@@ -447,6 +447,37 @@ function ensure_schema() {
         -- Set admins to TRUE by default
         UPDATE users SET can_manage_global_leads = TRUE WHERE role = 'admin';
       END IF;
+      -- Outscraper integration fields for leads
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='google_place_id') THEN
+        ALTER TABLE leads ADD COLUMN google_place_id TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='contact_name') THEN
+        ALTER TABLE leads ADD COLUMN contact_name TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='contact_title') THEN
+        ALTER TABLE leads ADD COLUMN contact_title TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='rating') THEN
+        ALTER TABLE leads ADD COLUMN rating NUMERIC(3,2);
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='reviews_count') THEN
+        ALTER TABLE leads ADD COLUMN reviews_count INTEGER;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='website') THEN
+        ALTER TABLE leads ADD COLUMN website TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='social_links') THEN
+        ALTER TABLE leads ADD COLUMN social_links JSONB;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='additional_phones') THEN
+        ALTER TABLE leads ADD COLUMN additional_phones JSONB;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='additional_emails') THEN
+        ALTER TABLE leads ADD COLUMN additional_emails JSONB;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='source') THEN
+        ALTER TABLE leads ADD COLUMN source TEXT;
+      END IF;
     END $$;
     
     CREATE INDEX IF NOT EXISTS idx_contacts_assigned ON contacts(assigned_to);
@@ -519,6 +550,25 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(event_type);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_assigned ON calendar_events(assigned_to);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_created_by ON calendar_events(created_by);
+    
+    -- Outscraper imports tracking table
+    CREATE TABLE IF NOT EXISTS outscraper_imports (
+      id SERIAL PRIMARY KEY,
+      task_id TEXT,
+      query TEXT,
+      total_records INTEGER DEFAULT 0,
+      imported_count INTEGER DEFAULT 0,
+      skipped_count INTEGER DEFAULT 0,
+      duplicate_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'processing',
+      error_details JSONB,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_leads_google_place_id ON leads(google_place_id);
+    CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source);
+    CREATE INDEX IF NOT EXISTS idx_outscraper_imports_created ON outscraper_imports(created_at);
 SQL);
 
   // Ensure admin user exists (passwordless - login via magic link)
@@ -616,6 +666,9 @@ if (isset($_GET['api'])) {
       case 'calendar.save': api_calendar_save(); break;
       case 'calendar.delete': api_calendar_delete(); break;
       case 'cal.webhook': api_cal_webhook(); break;
+      
+      case 'outscraper.webhook': api_outscraper_webhook(); break;
+      case 'outscraper_imports.list': api_outscraper_imports_list(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -2583,6 +2636,225 @@ function api_cal_webhook() {
   }
   
   respond(['ok' => true]);
+}
+
+function api_outscraper_webhook() {
+  $rawPayload = file_get_contents('php://input');
+  $data = json_decode($rawPayload, true);
+  
+  if (!$data) {
+    respond(['error' => 'Invalid JSON payload'], 400);
+  }
+  
+  $pdo = db();
+  
+  $stmt = $pdo->prepare("SELECT value FROM settings WHERE key = 'outscraper_webhook_secret'");
+  $stmt->execute();
+  $secretRow = $stmt->fetch();
+  $webhookSecret = $secretRow ? $secretRow['value'] : null;
+  
+  if ($webhookSecret) {
+    $signature = $_SERVER['HTTP_X_OUTSCRAPER_SIGNATURE'] ?? '';
+    $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+    
+    if (!hash_equals($expectedSignature, $signature)) {
+      error_log("Outscraper webhook: Signature mismatch - rejecting request");
+      respond(['error' => 'Invalid signature'], 401);
+    }
+  } else {
+    error_log("Outscraper webhook: No webhook secret configured - accepting unverified request for initial setup");
+  }
+  
+  $taskId = $data['id'] ?? $data['task_id'] ?? null;
+  $status = $data['status'] ?? 'unknown';
+  $query = $data['query'] ?? '';
+  $records = $data['data'] ?? $data['results'] ?? [];
+  
+  if (!is_array($records)) {
+    $records = [];
+  }
+  
+  $totalRecords = count($records);
+  $importedCount = 0;
+  $skippedCount = 0;
+  $duplicateCount = 0;
+  $errorCount = 0;
+  $errors = [];
+  
+  $stmt = $pdo->prepare("
+    INSERT INTO outscraper_imports (task_id, query, total_records, status)
+    VALUES (:task_id, :query, :total, 'processing')
+    RETURNING id
+  ");
+  $stmt->execute([
+    ':task_id' => $taskId,
+    ':query' => is_array($query) ? implode(', ', $query) : $query,
+    ':total' => $totalRecords
+  ]);
+  $importId = $stmt->fetchColumn();
+  
+  foreach ($records as $record) {
+    try {
+      $placeId = $record['place_id'] ?? null;
+      
+      if ($placeId) {
+        $checkStmt = $pdo->prepare("SELECT id FROM leads WHERE google_place_id = :place_id");
+        $checkStmt->execute([':place_id' => $placeId]);
+        if ($checkStmt->fetch()) {
+          $duplicateCount++;
+          continue;
+        }
+      }
+      
+      $companyName = $record['name'] ?? '';
+      if (empty($companyName)) {
+        $skippedCount++;
+        continue;
+      }
+      
+      $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? '';
+      
+      $additionalPhones = [];
+      if (!empty($record['phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['phones']);
+      if (!empty($record['company_phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['company_phones']);
+      if (!empty($record['contact_phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['contact_phones']);
+      if (!empty($record['phone']) && $record['phone'] !== $phone) $additionalPhones[] = $record['phone'];
+      if (!empty($record['company_phone']) && $record['company_phone'] !== $phone) $additionalPhones[] = $record['company_phone'];
+      $additionalPhones = array_unique(array_filter($additionalPhones));
+      
+      $email = $record['email'] ?? '';
+      $additionalEmails = [];
+      if (!empty($record['emails'])) $additionalEmails = array_merge($additionalEmails, (array)$record['emails']);
+      $additionalEmails = array_unique(array_filter($additionalEmails));
+      
+      $contactName = '';
+      if (!empty($record['full_name'])) {
+        $contactName = $record['full_name'];
+      } elseif (!empty($record['first_name']) || !empty($record['last_name'])) {
+        $contactName = trim(($record['first_name'] ?? '') . ' ' . ($record['last_name'] ?? ''));
+      }
+      
+      $contactTitle = $record['title'] ?? '';
+      
+      $addressParts = [];
+      if (!empty($record['address'])) {
+        $address = $record['address'];
+      } else {
+        if (!empty($record['street'])) $addressParts[] = $record['street'];
+        if (!empty($record['city'])) $addressParts[] = $record['city'];
+        if (!empty($record['state'])) $addressParts[] = $record['state'];
+        if (!empty($record['postal_code'])) $addressParts[] = $record['postal_code'];
+        if (!empty($record['country'])) $addressParts[] = $record['country'];
+        $address = implode(', ', $addressParts);
+      }
+      
+      $industry = $record['category'] ?? '';
+      if (empty($industry) && !empty($record['subtypes'])) {
+        $subtypes = is_array($record['subtypes']) ? $record['subtypes'] : explode(',', $record['subtypes']);
+        $industry = $subtypes[0] ?? '';
+      }
+      
+      $website = $record['website'] ?? $record['domain'] ?? '';
+      $rating = isset($record['rating']) ? floatval($record['rating']) : null;
+      $reviewsCount = isset($record['reviews']) ? intval($record['reviews']) : null;
+      
+      $socialLinks = [];
+      if (!empty($record['company_linkedin'])) $socialLinks['linkedin'] = $record['company_linkedin'];
+      if (!empty($record['company_facebook'])) $socialLinks['facebook'] = $record['company_facebook'];
+      if (!empty($record['company_instagram'])) $socialLinks['instagram'] = $record['company_instagram'];
+      if (!empty($record['company_x'])) $socialLinks['twitter'] = $record['company_x'];
+      if (!empty($record['company_youtube'])) $socialLinks['youtube'] = $record['company_youtube'];
+      if (!empty($record['contact_linkedin'])) $socialLinks['contact_linkedin'] = $record['contact_linkedin'];
+      
+      $insertStmt = $pdo->prepare("
+        INSERT INTO leads (
+          name, phone, email, company, address, industry, status, source,
+          google_place_id, contact_name, contact_title, rating, reviews_count,
+          website, social_links, additional_phones, additional_emails, created_at
+        ) VALUES (
+          :name, :phone, :email, :company, :address, :industry, 'global', 'outscraper',
+          :place_id, :contact_name, :contact_title, :rating, :reviews_count,
+          :website, :social_links, :additional_phones, :additional_emails, now()
+        )
+      ");
+      
+      $insertStmt->execute([
+        ':name' => $companyName,
+        ':phone' => $phone,
+        ':email' => $email,
+        ':company' => $companyName,
+        ':address' => $address,
+        ':industry' => $industry,
+        ':place_id' => $placeId,
+        ':contact_name' => $contactName,
+        ':contact_title' => $contactTitle,
+        ':rating' => $rating,
+        ':reviews_count' => $reviewsCount,
+        ':website' => $website,
+        ':social_links' => !empty($socialLinks) ? json_encode($socialLinks) : null,
+        ':additional_phones' => !empty($additionalPhones) ? json_encode(array_values($additionalPhones)) : null,
+        ':additional_emails' => !empty($additionalEmails) ? json_encode(array_values($additionalEmails)) : null
+      ]);
+      
+      $importedCount++;
+      
+    } catch (Throwable $e) {
+      $errorCount++;
+      $errors[] = ['record' => $record['name'] ?? 'unknown', 'error' => $e->getMessage()];
+      error_log("Outscraper import error: " . $e->getMessage());
+    }
+  }
+  
+  $updateStmt = $pdo->prepare("
+    UPDATE outscraper_imports SET
+      imported_count = :imported,
+      skipped_count = :skipped,
+      duplicate_count = :duplicate,
+      error_count = :errors,
+      error_details = :error_details,
+      status = 'completed'
+    WHERE id = :id
+  ");
+  $updateStmt->execute([
+    ':imported' => $importedCount,
+    ':skipped' => $skippedCount,
+    ':duplicate' => $duplicateCount,
+    ':errors' => $errorCount,
+    ':error_details' => !empty($errors) ? json_encode($errors) : null,
+    ':id' => $importId
+  ]);
+  
+  error_log("Outscraper import completed: $importedCount imported, $duplicateCount duplicates, $skippedCount skipped, $errorCount errors");
+  
+  respond([
+    'ok' => true,
+    'import_id' => $importId,
+    'total' => $totalRecords,
+    'imported' => $importedCount,
+    'duplicates' => $duplicateCount,
+    'skipped' => $skippedCount,
+    'errors' => $errorCount
+  ]);
+}
+
+function api_outscraper_imports_list() {
+  require_admin();
+  $pdo = db();
+  
+  $limit = (int)($_GET['limit'] ?? 20);
+  $offset = (int)($_GET['offset'] ?? 0);
+  
+  $stmt = $pdo->prepare("
+    SELECT * FROM outscraper_imports 
+    ORDER BY created_at DESC 
+    LIMIT :limit OFFSET :offset
+  ");
+  $stmt->execute([':limit' => $limit, ':offset' => $offset]);
+  $imports = $stmt->fetchAll();
+  
+  $total = $pdo->query("SELECT COUNT(*) FROM outscraper_imports")->fetchColumn();
+  
+  respond(['items' => $imports, 'total' => $total]);
 }
 
 
@@ -6029,12 +6301,15 @@ if (isset($_GET['background'])) {
       const defaultCountry = await api('settings.get&key=defaultCountry');
       const retellApiKeyCheck = await api('settings.exists&key=retell_api_key');
       const calWebhookSecretCheck = await api('settings.exists&key=cal_webhook_secret');
+      const outscraperSecretCheck = await api('settings.exists&key=outscraper_webhook_secret');
       const isAdmin = currentUser.role === 'admin';
       
       const hasRetellKey = retellApiKeyCheck.exists === true;
       const hasCalSecret = calWebhookSecretCheck.exists === true;
+      const hasOutscraperSecret = outscraperSecretCheck.exists === true;
       const retellValue = retellApiKeyCheck.value || '';
       const calValue = calWebhookSecretCheck.value || '';
+      const outscraperValue = outscraperSecretCheck.value || '';
       
       document.getElementById('view-settings').innerHTML = `
         <div class="card">
@@ -6070,6 +6345,20 @@ if (isset($_GET['background'])) {
           </div>
           <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=cal.webhook</code></p>
           <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Trigger: <strong>Booking created</strong></p>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <h3>🔍 Outscraper Lead Generation</h3>
+          <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Automatically import leads from Outscraper.com when scraping tasks complete. Leads are deduplicated using Google Place ID.</p>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+            <input type="password" id="outscraperWebhookSecret" value="${outscraperValue}" placeholder="Enter or generate a webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+            <button class="btn secondary" id="outscraperSecretToggle" onclick="toggleOutscraperSecretVisibility()">Show</button>
+            <button class="btn" onclick="generateOutscraperSecret()">Generate</button>
+            <button class="btn" onclick="saveOutscraperSecret()">Save</button>
+            ${hasOutscraperSecret ? '<span style="color: var(--success); font-size: 12px;">Configured</span>' : ''}
+          </div>
+          <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=outscraper.webhook</code></p>
+          <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Imported fields: Company name, contact name/title, phone, email, address, industry, rating, reviews, website, social links</p>
+          <button class="btn secondary" style="margin-top: 12px;" onclick="viewOutscraperImports()">View Import History</button>
         </div>
         <div class="card" style="margin-top: 16px;">
           <h3>Manage Industries</h3>
@@ -6168,6 +6457,84 @@ if (isset($_GET['background'])) {
         btn.textContent = '👁️ Show';
         btn.title = 'Show';
       }
+    }
+    
+    function toggleOutscraperSecretVisibility() {
+      const input = document.getElementById('outscraperWebhookSecret');
+      const btn = document.getElementById('outscraperSecretToggle');
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+      } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+      }
+    }
+    
+    function generateOutscraperSecret() {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const randomValues = new Uint32Array(32);
+      crypto.getRandomValues(randomValues);
+      let secret = 'outscraper_';
+      for (let i = 0; i < 32; i++) {
+        secret += chars.charAt(randomValues[i] % chars.length);
+      }
+      const input = document.getElementById('outscraperWebhookSecret');
+      input.value = secret;
+      input.type = 'text';
+      document.getElementById('outscraperSecretToggle').textContent = 'Hide';
+    }
+    
+    async function saveOutscraperSecret() {
+      const value = document.getElementById('outscraperWebhookSecret').value;
+      if (!value.trim()) {
+        alert('Please enter or generate a webhook secret');
+        return;
+      }
+      await api('settings.set', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'outscraper_webhook_secret', value })
+      });
+      alert('Outscraper webhook secret saved. Use this secret when configuring your Outscraper webhook.');
+      await renderSettings();
+    }
+    
+    async function viewOutscraperImports() {
+      const data = await api('outscraper_imports.list');
+      const imports = data.items || [];
+      
+      let html = '<div style="max-height: 400px; overflow-y: auto;">';
+      if (imports.length === 0) {
+        html += '<p style="color: var(--muted);">No imports yet. Configure Outscraper to send leads to your webhook URL.</p>';
+      } else {
+        html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+        html += '<tr style="background: var(--bg);"><th style="padding: 8px; text-align: left;">Date</th><th style="padding: 8px; text-align: left;">Query</th><th style="padding: 8px; text-align: center;">Imported</th><th style="padding: 8px; text-align: center;">Duplicates</th><th style="padding: 8px; text-align: center;">Errors</th></tr>';
+        imports.forEach(imp => {
+          const date = new Date(imp.created_at).toLocaleString();
+          html += `<tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 8px;">${date}</td>
+            <td style="padding: 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${imp.query || ''}">${imp.query || 'N/A'}</td>
+            <td style="padding: 8px; text-align: center; color: var(--success);">${imp.imported_count}</td>
+            <td style="padding: 8px; text-align: center; color: var(--warning);">${imp.duplicate_count}</td>
+            <td style="padding: 8px; text-align: center; color: var(--danger);">${imp.error_count}</td>
+          </tr>`;
+        });
+        html += '</table>';
+      }
+      html += '</div>';
+      
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `
+        <div class="modal" style="max-width: 600px;">
+          <h2>Outscraper Import History</h2>
+          ${html}
+          <div style="margin-top: 16px; text-align: right;">
+            <button class="btn" onclick="this.closest('.modal-overlay').remove()">Close</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
     }
     
     async function exportData() {

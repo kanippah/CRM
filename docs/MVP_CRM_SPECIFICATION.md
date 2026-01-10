@@ -148,16 +148,28 @@ interactions    calendar_events ◄─────── retell_calls
 | `phone` | TEXT | - | Phone number (raw format) |
 | `email` | TEXT | - | Email address |
 | `company` | TEXT | - | Company name |
-| `address` | TEXT | - | Physical address |
+| `address` | TEXT | - | Physical address (single line) |
 | `industry` | TEXT | - | Industry category |
 | `status` | TEXT | DEFAULT 'global' | 'global' or 'assigned' |
 | `assigned_to` | INTEGER | FK → users(id) ON DELETE SET NULL | Assigned user |
+| `google_place_id` | TEXT | - | Google Maps Place ID (Outscraper) |
+| `contact_name` | TEXT | - | Contact person name (Outscraper) |
+| `contact_title` | TEXT | - | Contact position/title (Outscraper) |
+| `rating` | NUMERIC(3,2) | - | Google rating 0-5 (Outscraper) |
+| `reviews_count` | INTEGER | - | Number of reviews (Outscraper) |
+| `website` | TEXT | - | Company website URL |
+| `social_links` | JSONB | - | Social media links (Outscraper) |
+| `additional_phones` | JSONB | - | Extra phone numbers (Outscraper) |
+| `additional_emails` | JSONB | - | Extra email addresses (Outscraper) |
+| `source` | TEXT | - | Lead source (e.g., 'outscraper') |
 | `created_at` | TIMESTAMPTZ | DEFAULT now() | Creation timestamp |
 | `updated_at` | TIMESTAMPTZ | DEFAULT now() | Last update timestamp |
 
 **Indexes:**
 - `idx_leads_status` on `status`
 - `idx_leads_assigned` on `assigned_to`
+- `idx_leads_google_place_id` on `google_place_id`
+- `idx_leads_source` on `source`
 
 #### `interactions`
 | Column | Type | Constraints | Description |
@@ -341,6 +353,24 @@ Technology, Healthcare, Finance, Manufacturing, Retail, Real Estate, Constructio
 - `idx_calendar_events_type` on `event_type`
 - `idx_calendar_events_assigned` on `assigned_to`
 - `idx_calendar_events_created_by` on `created_by`
+
+#### `outscraper_imports`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-increment ID |
+| `task_id` | TEXT | - | Outscraper task ID |
+| `query` | TEXT | - | Search query used |
+| `total_records` | INTEGER | DEFAULT 0 | Total records received |
+| `imported_count` | INTEGER | DEFAULT 0 | Successfully imported |
+| `skipped_count` | INTEGER | DEFAULT 0 | Skipped (empty name) |
+| `duplicate_count` | INTEGER | DEFAULT 0 | Duplicates found |
+| `error_count` | INTEGER | DEFAULT 0 | Errors during import |
+| `status` | TEXT | DEFAULT 'processing' | 'processing', 'completed' |
+| `error_details` | JSONB | - | Error details array |
+| `created_at` | TIMESTAMPTZ | DEFAULT now() | Import timestamp |
+
+**Indexes:**
+- `idx_outscraper_imports_created` on `created_at`
 
 ---
 
@@ -691,6 +721,8 @@ Chronological notes added to calls over time. Latest update shown in call list w
 |----------|--------|------|-------------|
 | `?api=retell.webhook` | POST | No* | Retell AI webhook |
 | `?api=cal.webhook` | POST | No* | Cal.com webhook |
+| `?api=outscraper.webhook` | POST | No* | Outscraper lead import webhook |
+| `?api=outscraper_imports.list` | GET | Admin | List Outscraper import history |
 
 *Webhooks use signature verification instead of session auth
 
@@ -853,6 +885,106 @@ $signature = hash_hmac('sha256', $rawPayload, $apiKey);
   }
 }
 ```
+
+### 8.3 Outscraper Webhook (Lead Generation)
+
+**Endpoint:** `POST ?api=outscraper.webhook`
+
+**Headers:**
+- `Content-Type: application/json`
+- `x-outscraper-signature: {HMAC-SHA256 signature}` (optional, recommended)
+
+**Purpose:** Automatically imports leads from Outscraper.com when scraping tasks complete. Supports Google Maps business data with intelligent field mapping and deduplication.
+
+**Payload Structure:**
+```json
+{
+  "id": "task_uuid",
+  "status": "finished",
+  "query": "real estate agency, new jersey",
+  "data": [
+    {
+      "name": "ABC Real Estate",
+      "place_id": "ChIJxxx",
+      "phone": "+1-555-123-4567",
+      "contact_phone": "+1-555-987-6543",
+      "company_phone": "+1-555-111-2222",
+      "company_phones": ["+1-555-111-2222", "+1-555-111-3333"],
+      "email": "info@abcrealty.com",
+      "website": "https://abcrealty.com",
+      "address": "123 Main St, Hoboken, NJ 07030, USA",
+      "street": "123 Main St",
+      "city": "Hoboken",
+      "state": "New Jersey",
+      "postal_code": "07030",
+      "country": "United States",
+      "category": "Real estate agency",
+      "subtypes": "Real estate agent, Property management",
+      "full_name": "John Smith",
+      "first_name": "John",
+      "last_name": "Smith",
+      "title": "Sales Manager",
+      "rating": 4.8,
+      "reviews": 127,
+      "company_linkedin": "https://linkedin.com/company/abc-realty",
+      "company_facebook": "https://facebook.com/abcrealty",
+      "company_instagram": "https://instagram.com/abcrealty",
+      "company_x": "https://x.com/abcrealty",
+      "contact_linkedin": "https://linkedin.com/in/johnsmith"
+    }
+  ]
+}
+```
+
+**Field Mapping:**
+
+| Outscraper Field | CRM Lead Field | Priority/Notes |
+|------------------|----------------|----------------|
+| `name` | `name`, `company` | Company name |
+| `place_id` | `google_place_id` | Used for deduplication |
+| `contact_phone` → `phone` → `company_phone` | `phone` | Smart selection (priority order) |
+| All other phones | `additional_phones` (JSON) | Stored for outreach |
+| `email` | `email` | Primary email |
+| Additional emails | `additional_emails` (JSON) | Stored for outreach |
+| `address` or combined fields | `address` | Single line format |
+| `category` or `subtypes[0]` | `industry` | Business type |
+| `full_name` or `first_name + last_name` | `contact_name` | Contact person |
+| `title` | `contact_title` | Position/role |
+| `rating` | `rating` | Google rating (0-5) |
+| `reviews` | `reviews_count` | Number of reviews |
+| `website` or `domain` | `website` | Company website |
+| Social links | `social_links` (JSON) | LinkedIn, Facebook, etc. |
+
+**Deduplication:**
+- Uses `google_place_id` to prevent duplicate imports
+- If a lead with the same `place_id` exists, the record is skipped
+
+**Import Tracking:**
+Imports are logged in `outscraper_imports` table with:
+- Total records received
+- Successfully imported count
+- Duplicate count (skipped)
+- Error count and details
+
+**Response:**
+```json
+{
+  "ok": true,
+  "import_id": 123,
+  "total": 50,
+  "imported": 45,
+  "duplicates": 3,
+  "skipped": 1,
+  "errors": 1
+}
+```
+
+**Setup Instructions:**
+1. Go to Settings → Outscraper Lead Generation in your CRM
+2. Generate or enter a webhook secret
+3. Copy the webhook URL: `https://your-domain.com/?api=outscraper.webhook`
+4. In Outscraper, configure your scraping task to send results to this webhook
+5. Include the webhook secret in the `x-outscraper-signature` header (HMAC-SHA256)
 
 ---
 
