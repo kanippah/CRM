@@ -721,7 +721,6 @@ Chronological notes added to calls over time. Latest update shown in call list w
 |----------|--------|------|-------------|
 | `?api=retell.webhook` | POST | No* | Retell AI webhook |
 | `?api=cal.webhook` | POST | No* | Cal.com webhook |
-| `?api=outscraper.webhook` | POST | No* | Outscraper lead import webhook |
 | `?api=outscraper_imports.list` | GET | Admin | List Outscraper import history |
 
 *Webhooks use signature verification instead of session auth
@@ -888,7 +887,6 @@ $signature = hash_hmac('sha256', $rawPayload, $apiKey);
 
 ### 8.3 Outscraper Webhook (Lead Generation)
 
-**Endpoint:** `POST ?api=outscraper.webhook`
 
 **Headers:**
 - `Content-Type: application/json`
@@ -982,7 +980,6 @@ Imports are logged in `outscraper_imports` table with:
 **Setup Instructions:**
 1. Go to Settings → Outscraper Lead Generation in your CRM
 2. Generate or enter a webhook secret
-3. Copy the webhook URL: `https://your-domain.com/?api=outscraper.webhook`
 4. In Outscraper, configure your scraping task to send results to this webhook
 5. Include the webhook secret in the `x-outscraper-signature` header (HMAC-SHA256)
 

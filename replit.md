@@ -30,7 +30,7 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Cal.com Integration:** Receives booking events via webhook for various statuses (created, confirmed, cancelled, rescheduled). Automatically matches bookings to leads/contacts and integrates them into the calendar.
 - **ClickSend SMS Integration:** Automatically sends SMS booking confirmations using ClickSend's Email-to-SMS gateway for Cal.com bookings with phone numbers.
 - **Global Leads Permission:** Allows admins to grant specific sales users the ability to create global leads.
-- **Outscraper Lead Generation:** Receives lead data via webhook from Outscraper.com (Google Maps scraping) or through manual file upload (Excel/CSV). Supports intelligent field mapping, multiple phone/email storage, deduplication via Google Place ID, staging/preview before approval, and import tracking.
+- **Outscraper Lead Generation:** Supports manual file upload (Excel/CSV) for lead data. Supports intelligent field mapping, multiple phone/email storage, deduplication via Google Place ID, staging/preview before approval, and import tracking.
 
 **System Design Choices:**
 - **Single-file PHP:** All application logic resides within `public/index.php`.
@@ -49,4 +49,3 @@ The CRM is implemented as a single-file PHP application (`public/index.php`) lev
 - **Retell AI:** Voice agent integration via webhook for post-call analysis, received at `?api=retell.webhook`.
 - **ClickSend:** SMS notifications via email-to-SMS gateway for Cal.com booking confirmations.
 - **Cal.com:** Booking platform integration via webhook for event lifecycle tracking, received at `?api=cal.webhook`.
-- **Outscraper:** Lead generation integration via webhook for automated Google Maps business data import, received at `?api=outscraper.webhook`.
