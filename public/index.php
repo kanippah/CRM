@@ -5294,7 +5294,6 @@ if (isset($_GET['background'])) {
                 <th style="width: 150px;">Details</th>
                 <th>Company</th>
                 <th>Industry</th>
-                <th style="width: 80px; text-align: center;">⭐</th>
                 <th>Status</th>
                 <th>Assigned To</th>
                 <th>Actions</th>
@@ -5373,12 +5372,6 @@ if (isset($_GET['background'])) {
             </td>
             <td>${lead.company || '-'}</td>
             <td><span style="font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">${lead.industry || '-'}</span></td>
-            <td style="text-align: center;">
-              ${lead.rating && !isHidden ? `
-                <div style="font-weight: 600; color: var(--kt-orange);">⭐ ${parseFloat(lead.rating).toFixed(1)}</div>
-                <div style="font-size: 10px; color: var(--muted);">${lead.reviews_count || 0} reviews</div>
-              ` : '-'}
-            </td>
             <td><span class="badge ${lead.status}">${lead.status}</span></td>
             <td>${lead.assigned_name || '-'}</td>
             <td>
@@ -7114,8 +7107,6 @@ if (isset($_GET['background'])) {
                   <th style="padding: 10px 6px; text-align: left;">Phone</th>
                   <th style="padding: 10px 6px; text-align: left;">Email</th>
                   <th style="padding: 10px 6px; text-align: left;">Industry</th>
-                  <th style="padding: 10px 6px; text-align: center;">Rating</th>
-                  <th style="padding: 10px 6px; text-align: center;">Reviews</th>
                   <th style="padding: 10px 6px; text-align: left;">Website</th>
                   <th style="padding: 10px 6px; text-align: left;">Address</th>
                 </tr>
@@ -7128,8 +7119,6 @@ if (isset($_GET['background'])) {
                     <td style="padding: 8px 6px; white-space: nowrap;">${item.phone || '-'}</td>
                     <td style="padding: 8px 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kt-blue); font-size: 11px;" title="${item.email || ''}">${item.email || '-'}</td>
                     <td style="padding: 8px 6px;"><span style="background: var(--bg); padding: 2px 6px; border-radius: 10px; font-size: 11px; white-space: nowrap;">${item.industry || '-'}</span></td>
-                    <td style="padding: 8px 6px; text-align: center;">${item.rating ? '⭐ ' + parseFloat(item.rating).toFixed(1) : '-'}</td>
-                    <td style="padding: 8px 6px; text-align: center;">${item.reviews_count || '-'}</td>
                     <td style="padding: 8px 6px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.website || ''}">${item.website ? `<a href="${item.website}" target="_blank" style="color: var(--kt-blue);">View</a>` : '-'}</td>
                     <td style="padding: 8px 6px; font-size: 11px; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.address || ''}">${item.address || '-'}</td>
                   </tr>
