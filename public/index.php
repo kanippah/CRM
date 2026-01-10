@@ -5291,10 +5291,10 @@ if (isset($_GET['background'])) {
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
-                <th>Email</th>
+                <th style="width: 150px;">Details</th>
                 <th>Company</th>
                 <th>Industry</th>
-                <th>Address</th>
+                <th style="width: 80px; text-align: center;">⭐</th>
                 <th>Status</th>
                 <th>Assigned To</th>
                 <th>Actions</th>
@@ -5362,18 +5362,31 @@ if (isset($_GET['background'])) {
         
         return `
           <tr>
-            <td>${nameDisplay}</td>
-            <td>${phoneDisplay}</td>
-            <td>${lead.email}</td>
+            <td>
+              <div style="font-weight: 500;">${nameDisplay}</div>
+              <div style="font-size: 11px; color: var(--muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis;" title="${isHidden ? '***' : (lead.address || '')}">${isHidden ? '***' : (lead.address || '')}</div>
+            </td>
+            <td style="white-space: nowrap;">${phoneDisplay}</td>
+            <td>
+              <div style="font-size: 12px; color: var(--kt-blue);">${isHidden ? '***' : (lead.email || '')}</div>
+              ${lead.website && !isHidden ? `<div style="font-size: 11px;"><a href="${lead.website}" target="_blank" style="color: var(--muted); text-decoration: none;">🌐 Website</a></div>` : ''}
+            </td>
             <td>${lead.company || '-'}</td>
-            <td>${lead.industry || '-'}</td>
-            <td>${isHidden ? '***' : lead.address}</td>
+            <td><span style="font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">${lead.industry || '-'}</span></td>
+            <td style="text-align: center;">
+              ${lead.rating && !isHidden ? `
+                <div style="font-weight: 600; color: var(--kt-orange);">⭐ ${parseFloat(lead.rating).toFixed(1)}</div>
+                <div style="font-size: 10px; color: var(--muted);">${lead.reviews_count || 0} reviews</div>
+              ` : '-'}
+            </td>
             <td><span class="badge ${lead.status}">${lead.status}</span></td>
             <td>${lead.assigned_name || '-'}</td>
             <td>
-              ${canGrab ? `<button class="btn success" onclick="grabLead(${lead.id})">Grab</button>` : ''}
-              ${canView && !isHidden ? `<button class="btn secondary" onclick="viewLead(${lead.id})">View</button>` : ''}
-              ${canView && !isHidden && currentUser.role === 'sales' ? `<button class="btn" style="background: #FF8C42;" onclick="convertLeadToContact(${lead.id})">Convert to Contact</button>` : ''}
+              <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                ${canGrab ? `<button class="btn success" style="padding: 4px 8px; font-size: 11px;" onclick="grabLead(${lead.id})">Grab</button>` : ''}
+                ${canView && !isHidden ? `<button class="btn secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openLeadForm(${lead.id})">Edit</button>` : ''}
+                ${canView && !isHidden && currentUser.role === 'sales' ? `<button class="btn" style="background: #FF8C42; color: white; padding: 4px 8px; font-size: 11px;" onclick="convertLeadToContact(${lead.id})">Convert</button>` : ''}
+              </div>
             </td>
           </tr>
         `;
@@ -5615,51 +5628,68 @@ if (isset($_GET['background'])) {
       showModal(`
         <h3>${lead ? 'Edit Lead' : 'Add Lead'}</h3>
         <form onsubmit="saveLead(event, ${lead ? lead.id : 'null'})">
-          <div class="form-group">
-            <label>Name *</label>
-            <input type="text" name="name" value="${lead?.name || ''}" required>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label>Name *</label>
+              <input type="text" name="name" value="${lead?.name || ''}" required>
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="text" name="phone" value="${lead?.phone || ''}">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" name="email" value="${lead?.email || ''}">
+            </div>
+            <div class="form-group">
+              <label>Company</label>
+              <input type="text" name="company" value="${lead?.company || ''}">
+            </div>
+            <div class="form-group">
+              <label>Industry</label>
+              <select name="industry">
+                <option value="">Select Industry</option>
+                ${industries.map(i => `<option value="${i.name}" ${lead?.industry === i.name ? 'selected' : ''}>${i.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Website</label>
+              <input type="text" name="website" value="${lead?.website || ''}" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label>Rating</label>
+              <input type="number" name="rating" value="${lead?.rating || ''}" step="0.1" min="0" max="5" placeholder="0.0 - 5.0">
+            </div>
+            <div class="form-group">
+              <label>Reviews Count</label>
+              <input type="number" name="reviews_count" value="${lead?.reviews_count || ''}" min="0">
+            </div>
           </div>
-          <div class="form-group">
-            <label>Phone</label>
-            <input type="text" name="phone" value="${lead?.phone || ''}">
-          </div>
-          <div class="form-group">
-            <label>Email</label>
-            <input type="email" name="email" value="${lead?.email || ''}">
-          </div>
-          <div class="form-group">
-            <label>Company</label>
-            <input type="text" name="company" value="${lead?.company || ''}">
-          </div>
-          <div class="form-group">
-            <label>Industry</label>
-            <select name="industry">
-              <option value="">Select Industry</option>
-              ${industries.map(i => `<option value="${i.name}" ${lead?.industry === i.name ? 'selected' : ''}>${i.name}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
+          <div class="form-group" style="margin-top: 16px;">
             <label>Address</label>
-            <textarea name="address">${lead?.address || ''}</textarea>
+            <textarea name="address" rows="2">${lead?.address || ''}</textarea>
           </div>
           <button type="submit" class="btn">Save</button>
           <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
         </form>
       `);
     }
-    
+
     async function saveLead(e, id) {
       e.preventDefault();
       const form = e.target;
       const data = {
-        id,
         name: form.name.value,
         phone: form.phone.value,
         email: form.email.value,
         company: form.company.value,
         industry: form.industry.value,
-        address: form.address.value
+        address: form.address.value,
+        website: form.website.value,
+        rating: form.rating.value,
+        reviews_count: form.reviews_count.value
       };
+      if (id) data.id = id;
       
       try {
         await api('leads.save', {
