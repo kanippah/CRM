@@ -569,6 +569,33 @@ function ensure_schema() {
     CREATE INDEX IF NOT EXISTS idx_leads_google_place_id ON leads(google_place_id);
     CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source);
     CREATE INDEX IF NOT EXISTS idx_outscraper_imports_created ON outscraper_imports(created_at);
+    
+    -- Staging table for Outscraper file uploads (pending review)
+    CREATE TABLE IF NOT EXISTS outscraper_staging (
+      id SERIAL PRIMARY KEY,
+      batch_id TEXT NOT NULL,
+      name TEXT,
+      phone TEXT,
+      email TEXT,
+      company TEXT,
+      address TEXT,
+      industry TEXT,
+      google_place_id TEXT,
+      contact_name TEXT,
+      contact_title TEXT,
+      rating DECIMAL(2,1),
+      reviews_count INTEGER,
+      website TEXT,
+      social_links JSONB,
+      additional_phones JSONB,
+      additional_emails JSONB,
+      raw_data JSONB,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_outscraper_staging_batch ON outscraper_staging(batch_id);
+    CREATE INDEX IF NOT EXISTS idx_outscraper_staging_status ON outscraper_staging(status);
 SQL);
 
   // Ensure admin user exists (passwordless - login via magic link)
@@ -669,6 +696,11 @@ if (isset($_GET['api'])) {
       
       case 'outscraper.webhook': api_outscraper_webhook(); break;
       case 'outscraper_imports.list': api_outscraper_imports_list(); break;
+      case 'outscraper.upload': api_outscraper_upload(); break;
+      case 'outscraper_staging.list': api_outscraper_staging_list(); break;
+      case 'outscraper_staging.approve': api_outscraper_staging_approve(); break;
+      case 'outscraper_staging.reject': api_outscraper_staging_reject(); break;
+      case 'outscraper_staging.clear': api_outscraper_staging_clear(); break;
       
       default: respond(['error' => 'Unknown action'], 404);
     }
@@ -2855,6 +2887,445 @@ function api_outscraper_imports_list() {
   $total = $pdo->query("SELECT COUNT(*) FROM outscraper_imports")->fetchColumn();
   
   respond(['items' => $imports, 'total' => $total]);
+}
+
+function parseXlsxFile($filePath) {
+  $zip = new ZipArchive();
+  if ($zip->open($filePath) !== true) {
+    throw new Exception('Cannot open Excel file');
+  }
+  
+  $sharedStrings = [];
+  $sharedStringsXml = $zip->getFromName('xl/sharedStrings.xml');
+  if ($sharedStringsXml) {
+    $xml = simplexml_load_string($sharedStringsXml);
+    foreach ($xml->si as $si) {
+      if (isset($si->t)) {
+        $sharedStrings[] = (string)$si->t;
+      } elseif (isset($si->r)) {
+        $text = '';
+        foreach ($si->r as $r) {
+          $text .= (string)$r->t;
+        }
+        $sharedStrings[] = $text;
+      } else {
+        $sharedStrings[] = '';
+      }
+    }
+  }
+  
+  $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+  if (!$sheetXml) {
+    $zip->close();
+    throw new Exception('Cannot find worksheet');
+  }
+  
+  $xml = simplexml_load_string($sheetXml);
+  $rows = [];
+  $headers = [];
+  $headerColIndexes = [];
+  $rowIndex = 0;
+  
+  foreach ($xml->sheetData->row as $row) {
+    $rowData = [];
+    
+    foreach ($row->c as $cell) {
+      $cellRef = (string)$cell['r'];
+      preg_match('/^([A-Z]+)/', $cellRef, $matches);
+      $colLetter = $matches[1] ?? 'A';
+      $colIndex = 0;
+      $len = strlen($colLetter);
+      for ($i = 0; $i < $len; $i++) {
+        $colIndex = $colIndex * 26 + (ord($colLetter[$i]) - ord('A') + 1);
+      }
+      $colIndex--;
+      
+      $value = '';
+      if (isset($cell->v)) {
+        $value = (string)$cell->v;
+        $type = (string)$cell['t'];
+        if ($type === 's' && isset($sharedStrings[(int)$value])) {
+          $value = $sharedStrings[(int)$value];
+        }
+      } elseif (isset($cell->is->t)) {
+        $value = (string)$cell->is->t;
+      }
+      
+      $rowData[$colIndex] = $value;
+    }
+    
+    if ($rowIndex === 0) {
+      ksort($rowData);
+      $headers = $rowData;
+      $headerColIndexes = array_keys($rowData);
+    } else {
+      $record = [];
+      foreach ($headerColIndexes as $colIdx) {
+        $header = $headers[$colIdx] ?? '';
+        if (!empty($header)) {
+          $record[$header] = $rowData[$colIdx] ?? '';
+        }
+      }
+      if (!empty($record)) {
+        $rows[] = $record;
+      }
+    }
+    $rowIndex++;
+  }
+  
+  $zip->close();
+  return $rows;
+}
+
+function parseCsvFile($filePath) {
+  $rows = [];
+  $headers = [];
+  $handle = fopen($filePath, 'r');
+  
+  if (!$handle) {
+    throw new Exception('Cannot open CSV file');
+  }
+  
+  $rowIndex = 0;
+  while (($data = fgetcsv($handle)) !== false) {
+    if ($rowIndex === 0) {
+      $headers = $data;
+    } else {
+      $record = [];
+      foreach ($headers as $i => $header) {
+        $record[$header] = $data[$i] ?? '';
+      }
+      $rows[] = $record;
+    }
+    $rowIndex++;
+  }
+  
+  fclose($handle);
+  return $rows;
+}
+
+function mapOutscraperRecord($record) {
+  $companyName = $record['name'] ?? $record['title'] ?? $record['business_name'] ?? '';
+  
+  $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? '';
+  $additionalPhones = [];
+  foreach (['phone_1', 'phone_2', 'phone_3', 'company_phone', 'contact_phone'] as $field) {
+    if (!empty($record[$field]) && $record[$field] !== $phone) {
+      $additionalPhones[$record[$field]] = $record[$field];
+    }
+  }
+  
+  $email = $record['email'] ?? $record['contact_email'] ?? $record['company_email'] ?? '';
+  $additionalEmails = [];
+  foreach (['email_1', 'email_2', 'email_3', 'company_email', 'contact_email'] as $field) {
+    if (!empty($record[$field]) && $record[$field] !== $email) {
+      $additionalEmails[$record[$field]] = $record[$field];
+    }
+  }
+  
+  $contactName = $record['contact_name'] ?? $record['owner'] ?? '';
+  $contactTitle = $record['contact_title'] ?? $record['job_title'] ?? '';
+  
+  $address = $record['full_address'] ?? $record['address'] ?? '';
+  if (empty($address)) {
+    $addressParts = [];
+    if (!empty($record['street'])) $addressParts[] = $record['street'];
+    if (!empty($record['city'])) $addressParts[] = $record['city'];
+    if (!empty($record['state'])) $addressParts[] = $record['state'];
+    if (!empty($record['postal_code'])) $addressParts[] = $record['postal_code'];
+    if (!empty($record['country'])) $addressParts[] = $record['country'];
+    $address = implode(', ', $addressParts);
+  }
+  
+  $industry = $record['category'] ?? $record['type'] ?? '';
+  if (empty($industry) && !empty($record['subtypes'])) {
+    $subtypes = is_array($record['subtypes']) ? $record['subtypes'] : explode(',', $record['subtypes']);
+    $industry = $subtypes[0] ?? '';
+  }
+  
+  $website = $record['website'] ?? $record['domain'] ?? '';
+  $rating = isset($record['rating']) && is_numeric($record['rating']) ? floatval($record['rating']) : null;
+  $reviewsCount = isset($record['reviews']) && is_numeric($record['reviews']) ? intval($record['reviews']) : null;
+  
+  $socialLinks = [];
+  if (!empty($record['company_linkedin'])) $socialLinks['linkedin'] = $record['company_linkedin'];
+  if (!empty($record['company_facebook'])) $socialLinks['facebook'] = $record['company_facebook'];
+  if (!empty($record['company_instagram'])) $socialLinks['instagram'] = $record['company_instagram'];
+  if (!empty($record['company_x'])) $socialLinks['twitter'] = $record['company_x'];
+  if (!empty($record['company_youtube'])) $socialLinks['youtube'] = $record['company_youtube'];
+  
+  $placeId = $record['place_id'] ?? $record['google_place_id'] ?? null;
+  
+  return [
+    'name' => $companyName,
+    'phone' => $phone,
+    'email' => $email,
+    'company' => $companyName,
+    'address' => $address,
+    'industry' => $industry,
+    'google_place_id' => $placeId,
+    'contact_name' => $contactName,
+    'contact_title' => $contactTitle,
+    'rating' => $rating,
+    'reviews_count' => $reviewsCount,
+    'website' => $website,
+    'social_links' => $socialLinks,
+    'additional_phones' => array_values($additionalPhones),
+    'additional_emails' => array_values($additionalEmails)
+  ];
+}
+
+function api_outscraper_upload() {
+  require_admin();
+  
+  if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+    respond(['error' => 'No file uploaded or upload error'], 400);
+  }
+  
+  $file = $_FILES['file'];
+  $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+  
+  if (!in_array($ext, ['xlsx', 'csv'])) {
+    respond(['error' => 'Only Excel (.xlsx) or CSV (.csv) files are supported'], 400);
+  }
+  
+  try {
+    if ($ext === 'xlsx') {
+      $records = parseXlsxFile($file['tmp_name']);
+    } else {
+      $records = parseCsvFile($file['tmp_name']);
+    }
+    
+    if (empty($records)) {
+      respond(['error' => 'No records found in file'], 400);
+    }
+    
+    $pdo = db();
+    $batchId = 'batch_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
+    
+    $insertStmt = $pdo->prepare("
+      INSERT INTO outscraper_staging (
+        batch_id, name, phone, email, company, address, industry,
+        google_place_id, contact_name, contact_title, rating, reviews_count,
+        website, social_links, additional_phones, additional_emails, raw_data, status
+      ) VALUES (
+        :batch_id, :name, :phone, :email, :company, :address, :industry,
+        :place_id, :contact_name, :contact_title, :rating, :reviews_count,
+        :website, :social_links, :additional_phones, :additional_emails, :raw_data, 'pending'
+      )
+    ");
+    
+    $importedCount = 0;
+    foreach ($records as $record) {
+      $mapped = mapOutscraperRecord($record);
+      
+      if (empty($mapped['name'])) continue;
+      
+      $insertStmt->execute([
+        ':batch_id' => $batchId,
+        ':name' => $mapped['name'],
+        ':phone' => $mapped['phone'],
+        ':email' => $mapped['email'],
+        ':company' => $mapped['company'],
+        ':address' => $mapped['address'],
+        ':industry' => $mapped['industry'],
+        ':place_id' => $mapped['google_place_id'],
+        ':contact_name' => $mapped['contact_name'],
+        ':contact_title' => $mapped['contact_title'],
+        ':rating' => $mapped['rating'],
+        ':reviews_count' => $mapped['reviews_count'],
+        ':website' => $mapped['website'],
+        ':social_links' => !empty($mapped['social_links']) ? json_encode($mapped['social_links']) : null,
+        ':additional_phones' => !empty($mapped['additional_phones']) ? json_encode($mapped['additional_phones']) : null,
+        ':additional_emails' => !empty($mapped['additional_emails']) ? json_encode($mapped['additional_emails']) : null,
+        ':raw_data' => json_encode($record)
+      ]);
+      $importedCount++;
+    }
+    
+    respond([
+      'ok' => true,
+      'batch_id' => $batchId,
+      'parsed' => $importedCount,
+      'total_in_file' => count($records)
+    ]);
+    
+  } catch (Throwable $e) {
+    respond(['error' => 'Failed to parse file: ' . $e->getMessage()], 500);
+  }
+}
+
+function api_outscraper_staging_list() {
+  require_admin();
+  $pdo = db();
+  
+  $batchId = $_GET['batch_id'] ?? null;
+  $status = $_GET['status'] ?? 'pending';
+  
+  $sql = "SELECT * FROM outscraper_staging WHERE status = :status";
+  $params = [':status' => $status];
+  
+  if ($batchId) {
+    $sql .= " AND batch_id = :batch_id";
+    $params[':batch_id'] = $batchId;
+  }
+  
+  $sql .= " ORDER BY created_at DESC";
+  
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $items = $stmt->fetchAll();
+  
+  $batchesStmt = $pdo->query("
+    SELECT batch_id, COUNT(*) as count, MIN(created_at) as created_at 
+    FROM outscraper_staging 
+    WHERE status = 'pending' 
+    GROUP BY batch_id 
+    ORDER BY created_at DESC
+  ");
+  $batches = $batchesStmt->fetchAll();
+  
+  respond(['items' => $items, 'batches' => $batches]);
+}
+
+function api_outscraper_staging_approve() {
+  require_admin();
+  $pdo = db();
+  $b = body_json();
+  
+  $ids = $b['ids'] ?? [];
+  $approveAll = $b['approve_all'] ?? false;
+  $batchId = $b['batch_id'] ?? null;
+  
+  if (empty($ids) && !$approveAll) {
+    respond(['error' => 'No leads selected'], 400);
+  }
+  
+  if ($approveAll && $batchId) {
+    $stmt = $pdo->prepare("SELECT * FROM outscraper_staging WHERE batch_id = :batch_id AND status = 'pending'");
+    $stmt->execute([':batch_id' => $batchId]);
+  } elseif ($approveAll) {
+    $stmt = $pdo->query("SELECT * FROM outscraper_staging WHERE status = 'pending'");
+  } else {
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT * FROM outscraper_staging WHERE id IN ($placeholders) AND status = 'pending'");
+    $stmt->execute($ids);
+  }
+  
+  $staging = $stmt->fetchAll();
+  
+  $importedCount = 0;
+  $duplicateCount = 0;
+  
+  $checkStmt = $pdo->prepare("SELECT id FROM leads WHERE google_place_id = :place_id");
+  $insertStmt = $pdo->prepare("
+    INSERT INTO leads (
+      name, phone, email, company, address, industry, status, source,
+      google_place_id, contact_name, contact_title, rating, reviews_count,
+      website, social_links, additional_phones, additional_emails, created_at
+    ) VALUES (
+      :name, :phone, :email, :company, :address, :industry, 'global', 'outscraper',
+      :place_id, :contact_name, :contact_title, :rating, :reviews_count,
+      :website, :social_links, :additional_phones, :additional_emails, now()
+    )
+  ");
+  $updateStmt = $pdo->prepare("UPDATE outscraper_staging SET status = :status WHERE id = :id");
+  
+  foreach ($staging as $row) {
+    if (!empty($row['google_place_id'])) {
+      $checkStmt->execute([':place_id' => $row['google_place_id']]);
+      if ($checkStmt->fetch()) {
+        $updateStmt->execute([':status' => 'duplicate', ':id' => $row['id']]);
+        $duplicateCount++;
+        continue;
+      }
+    }
+    
+    $insertStmt->execute([
+      ':name' => $row['name'],
+      ':phone' => $row['phone'],
+      ':email' => $row['email'],
+      ':company' => $row['company'],
+      ':address' => $row['address'],
+      ':industry' => $row['industry'],
+      ':place_id' => $row['google_place_id'],
+      ':contact_name' => $row['contact_name'],
+      ':contact_title' => $row['contact_title'],
+      ':rating' => $row['rating'],
+      ':reviews_count' => $row['reviews_count'],
+      ':website' => $row['website'],
+      ':social_links' => $row['social_links'],
+      ':additional_phones' => $row['additional_phones'],
+      ':additional_emails' => $row['additional_emails']
+    ]);
+    
+    $updateStmt->execute([':status' => 'approved', ':id' => $row['id']]);
+    $importedCount++;
+  }
+  
+  respond([
+    'ok' => true,
+    'imported' => $importedCount,
+    'duplicates' => $duplicateCount
+  ]);
+}
+
+function api_outscraper_staging_reject() {
+  require_admin();
+  $pdo = db();
+  $b = body_json();
+  
+  $ids = $b['ids'] ?? [];
+  $rejectAll = $b['reject_all'] ?? false;
+  $batchId = $b['batch_id'] ?? null;
+  
+  if (empty($ids) && !$rejectAll) {
+    respond(['error' => 'No leads selected'], 400);
+  }
+  
+  if ($rejectAll && $batchId) {
+    $stmt = $pdo->prepare("UPDATE outscraper_staging SET status = 'rejected' WHERE batch_id = :batch_id AND status = 'pending'");
+    $stmt->execute([':batch_id' => $batchId]);
+    $count = $stmt->rowCount();
+  } elseif ($rejectAll) {
+    $stmt = $pdo->query("UPDATE outscraper_staging SET status = 'rejected' WHERE status = 'pending'");
+    $count = $stmt->rowCount();
+  } else {
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("UPDATE outscraper_staging SET status = 'rejected' WHERE id IN ($placeholders) AND status = 'pending'");
+    $stmt->execute($ids);
+    $count = $stmt->rowCount();
+  }
+  
+  respond(['ok' => true, 'rejected' => $count]);
+}
+
+function api_outscraper_staging_clear() {
+  require_admin();
+  $pdo = db();
+  $b = body_json();
+  
+  $status = $b['status'] ?? 'all';
+  $batchId = $b['batch_id'] ?? null;
+  
+  if ($status === 'all') {
+    if ($batchId) {
+      $stmt = $pdo->prepare("DELETE FROM outscraper_staging WHERE batch_id = :batch_id");
+      $stmt->execute([':batch_id' => $batchId]);
+    } else {
+      $pdo->exec("DELETE FROM outscraper_staging");
+    }
+  } else {
+    if ($batchId) {
+      $stmt = $pdo->prepare("DELETE FROM outscraper_staging WHERE status = :status AND batch_id = :batch_id");
+      $stmt->execute([':status' => $status, ':batch_id' => $batchId]);
+    } else {
+      $stmt = $pdo->prepare("DELETE FROM outscraper_staging WHERE status = :status");
+      $stmt->execute([':status' => $status]);
+    }
+  }
+  
+  respond(['ok' => true]);
 }
 
 
@@ -6348,16 +6819,31 @@ if (isset($_GET['background'])) {
         </div>
         <div class="card" style="margin-top: 16px;">
           <h3>🔍 Outscraper Lead Generation</h3>
-          <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Automatically import leads from Outscraper.com when scraping tasks complete. Leads are deduplicated using Google Place ID.</p>
-          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-            <input type="password" id="outscraperWebhookSecret" value="${outscraperValue}" placeholder="Enter or generate a webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-            <button class="btn secondary" id="outscraperSecretToggle" onclick="toggleOutscraperSecretVisibility()">Show</button>
-            <button class="btn" onclick="generateOutscraperSecret()">Generate</button>
-            <button class="btn" onclick="saveOutscraperSecret()">Save</button>
-            ${hasOutscraperSecret ? '<span style="color: var(--success); font-size: 12px;">Configured</span>' : ''}
+          <p style="color: var(--muted); margin-bottom: 12px; font-size: 13px;">Import leads from Outscraper.com via webhook or file upload. Leads are deduplicated using Google Place ID.</p>
+          
+          <div style="background: var(--bg); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+            <h4 style="margin: 0 0 8px 0; font-size: 14px;">📁 File Upload (Manual)</h4>
+            <p style="color: var(--muted); font-size: 12px; margin-bottom: 8px;">Upload an Outscraper Excel or CSV export file. You can review leads before adding to the global pool.</p>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <input type="file" id="outscraperFile" accept=".xlsx,.csv" style="display: none;" onchange="uploadOutscraperFile(event)">
+              <button class="btn" onclick="document.getElementById('outscraperFile').click()">📤 Upload File</button>
+              <button class="btn secondary" onclick="viewOutscraperStaging()">👁️ Review Pending Leads</button>
+            </div>
           </div>
-          <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=outscraper.webhook</code></p>
-          <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">Imported fields: Company name, contact name/title, phone, email, address, industry, rating, reviews, website, social links</p>
+          
+          <div style="background: var(--bg); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+            <h4 style="margin: 0 0 8px 0; font-size: 14px;">🔗 Webhook (Automatic)</h4>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+              <input type="password" id="outscraperWebhookSecret" value="${outscraperValue}" placeholder="Enter or generate a webhook secret..." style="flex: 1; min-width: 200px; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+              <button class="btn secondary" id="outscraperSecretToggle" onclick="toggleOutscraperSecretVisibility()">Show</button>
+              <button class="btn" onclick="generateOutscraperSecret()">Generate</button>
+              <button class="btn" onclick="saveOutscraperSecret()">Save</button>
+              ${hasOutscraperSecret ? '<span style="color: var(--success); font-size: 12px;">Configured</span>' : ''}
+            </div>
+            <p style="color: var(--muted); font-size: 12px;">Webhook URL: <code style="background: var(--panel); padding: 2px 6px; border-radius: 4px;">${window.location.origin}/?api=outscraper.webhook</code></p>
+          </div>
+          
+          <p style="color: var(--muted); font-size: 12px;">Imported fields: Company name, contact name/title, phone, email, address, industry, rating, reviews, website, social links</p>
           <button class="btn secondary" style="margin-top: 12px;" onclick="viewOutscraperImports()">View Import History</button>
         </div>
         <div class="card" style="margin-top: 16px;">
@@ -6535,6 +7021,168 @@ if (isset($_GET['background'])) {
         </div>
       `;
       document.body.appendChild(modal);
+    }
+    
+    async function uploadOutscraperFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await fetch('?api=outscraper.upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          alert('Upload failed: ' + result.error);
+          return;
+        }
+        
+        alert(`File parsed successfully!\n\n${result.parsed} leads ready for review.\n\nClick "Review Pending Leads" to approve them.`);
+        e.target.value = '';
+        viewOutscraperStaging();
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    }
+    
+    async function viewOutscraperStaging() {
+      const data = await api('outscraper_staging.list&status=pending');
+      const items = data.items || [];
+      const batches = data.batches || [];
+      
+      let html = '';
+      
+      if (items.length === 0) {
+        html = '<p style="color: var(--muted);">No pending leads to review. Upload an Outscraper file to get started.</p>';
+      } else {
+        html += `<p style="margin-bottom: 12px;">Found <strong>${items.length}</strong> leads pending review.</p>`;
+        
+        if (batches.length > 1) {
+          html += '<div style="margin-bottom: 12px;"><label>Filter by batch: </label><select id="stagingBatchFilter" onchange="filterStagingBatch(this.value)">';
+          html += '<option value="">All batches</option>';
+          batches.forEach(b => {
+            const date = new Date(b.created_at).toLocaleString();
+            html += `<option value="${b.batch_id}">${date} (${b.count} leads)</option>`;
+          });
+          html += '</select></div>';
+        }
+        
+        html += '<div style="max-height: 350px; overflow-y: auto;">';
+        html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+        html += '<tr style="background: var(--bg);"><th style="padding: 6px;"><input type="checkbox" id="selectAllStaging" onchange="toggleAllStaging(this.checked)"></th><th style="padding: 6px; text-align: left;">Company</th><th style="padding: 6px; text-align: left;">Phone</th><th style="padding: 6px; text-align: left;">Email</th><th style="padding: 6px; text-align: left;">Industry</th><th style="padding: 6px; text-align: left;">Address</th></tr>';
+        
+        items.forEach(item => {
+          html += `<tr style="border-bottom: 1px solid var(--border);" data-batch="${item.batch_id}">
+            <td style="padding: 6px;"><input type="checkbox" class="staging-checkbox" value="${item.id}"></td>
+            <td style="padding: 6px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.name || ''}">${item.name || '-'}</td>
+            <td style="padding: 6px;">${item.phone || '-'}</td>
+            <td style="padding: 6px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.email || ''}">${item.email || '-'}</td>
+            <td style="padding: 6px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.industry || ''}">${item.industry || '-'}</td>
+            <td style="padding: 6px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.address || ''}">${item.address || '-'}</td>
+          </tr>`;
+        });
+        html += '</table></div>';
+      }
+      
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `
+        <div class="modal" style="max-width: 900px;">
+          <h2>Review Outscraper Leads</h2>
+          ${html}
+          <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap;">
+            <div>
+              ${items.length > 0 ? `
+                <button class="btn" onclick="approveSelectedStaging()">✓ Approve Selected</button>
+                <button class="btn" style="background: var(--success);" onclick="approveAllStaging()">✓ Approve All</button>
+                <button class="btn danger" onclick="rejectSelectedStaging()">✗ Reject Selected</button>
+              ` : ''}
+            </div>
+            <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">Close</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+    
+    function toggleAllStaging(checked) {
+      document.querySelectorAll('.staging-checkbox').forEach(cb => cb.checked = checked);
+    }
+    
+    function filterStagingBatch(batchId) {
+      document.querySelectorAll('.modal table tr[data-batch]').forEach(row => {
+        if (!batchId || row.dataset.batch === batchId) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+    
+    async function approveSelectedStaging() {
+      const ids = Array.from(document.querySelectorAll('.staging-checkbox:checked')).map(cb => parseInt(cb.value));
+      if (ids.length === 0) {
+        alert('Please select at least one lead to approve');
+        return;
+      }
+      
+      const result = await api('outscraper_staging.approve', {
+        method: 'POST',
+        body: JSON.stringify({ ids })
+      });
+      
+      if (result.ok) {
+        alert(`Approved ${result.imported} leads to global pool.\n${result.duplicates} duplicates skipped.`);
+        document.querySelector('.modal-overlay').remove();
+        viewOutscraperStaging();
+      } else {
+        alert('Error: ' + (result.error || 'Unknown error'));
+      }
+    }
+    
+    async function approveAllStaging() {
+      if (!confirm('Approve ALL pending leads and add them to the global pool?')) return;
+      
+      const result = await api('outscraper_staging.approve', {
+        method: 'POST',
+        body: JSON.stringify({ approve_all: true })
+      });
+      
+      if (result.ok) {
+        alert(`Approved ${result.imported} leads to global pool.\n${result.duplicates} duplicates skipped.`);
+        document.querySelector('.modal-overlay').remove();
+      } else {
+        alert('Error: ' + (result.error || 'Unknown error'));
+      }
+    }
+    
+    async function rejectSelectedStaging() {
+      const ids = Array.from(document.querySelectorAll('.staging-checkbox:checked')).map(cb => parseInt(cb.value));
+      if (ids.length === 0) {
+        alert('Please select at least one lead to reject');
+        return;
+      }
+      
+      if (!confirm(`Reject ${ids.length} selected leads?`)) return;
+      
+      const result = await api('outscraper_staging.reject', {
+        method: 'POST',
+        body: JSON.stringify({ ids })
+      });
+      
+      if (result.ok) {
+        alert(`Rejected ${result.rejected} leads.`);
+        document.querySelector('.modal-overlay').remove();
+        viewOutscraperStaging();
+      } else {
+        alert('Error: ' + (result.error || 'Unknown error'));
+      }
     }
     
     async function exportData() {
