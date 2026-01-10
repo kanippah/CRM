@@ -2746,6 +2746,16 @@ function api_outscraper_webhook() {
       
       $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? $record['phone_1'] ?? $record['phone_2'] ?? '';
       
+      // Handle plural company_phones
+      if (empty($phone) && !empty($record['company_phones'])) {
+        if (is_array($record['company_phones'])) {
+          $phone = $record['company_phones'][0] ?? '';
+        } else {
+          $phones = explode(',', $record['company_phones']);
+          $phone = trim($phones[0]);
+        }
+      }
+
       $additionalPhones = [];
       if (!empty($record['phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['phones']);
       if (!empty($record['company_phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['company_phones']);
@@ -3010,12 +3020,32 @@ function parseCsvFile($filePath) {
 function mapOutscraperRecord($record) {
   $companyName = $record['name'] ?? $record['title'] ?? $record['business_name'] ?? '';
   
-  // Improved phone mapping to check more possible column names
   $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? $record['phone_1'] ?? $record['phone_2'] ?? '';
+  
+  // Handle plural company_phones which might be an array or comma-separated string
+  if (empty($phone) && !empty($record['company_phones'])) {
+    if (is_array($record['company_phones'])) {
+      $phone = $record['company_phones'][0] ?? '';
+    } else {
+      $phones = explode(',', $record['company_phones']);
+      $phone = trim($phones[0]);
+    }
+  }
+
   $additionalPhones = [];
   foreach (['phone_1', 'phone_2', 'phone_3', 'company_phone', 'contact_phone', 'phone'] as $field) {
     if (!empty($record[$field]) && $record[$field] !== $phone) {
       $additionalPhones[$record[$field]] = $record[$field];
+    }
+  }
+  
+  if (!empty($record['company_phones'])) {
+    $pluralPhones = is_array($record['company_phones']) ? $record['company_phones'] : explode(',', $record['company_phones']);
+    foreach ($pluralPhones as $p) {
+      $p = trim($p);
+      if (!empty($p) && $p !== $phone) {
+        $additionalPhones[$p] = $p;
+      }
     }
   }
   
