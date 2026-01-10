@@ -2744,14 +2744,17 @@ function api_outscraper_webhook() {
         continue;
       }
       
-      $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? '';
+      $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? $record['phone_1'] ?? $record['phone_2'] ?? '';
       
       $additionalPhones = [];
       if (!empty($record['phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['phones']);
       if (!empty($record['company_phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['company_phones']);
       if (!empty($record['contact_phones'])) $additionalPhones = array_merge($additionalPhones, (array)$record['contact_phones']);
-      if (!empty($record['phone']) && $record['phone'] !== $phone) $additionalPhones[] = $record['phone'];
-      if (!empty($record['company_phone']) && $record['company_phone'] !== $phone) $additionalPhones[] = $record['company_phone'];
+      foreach (['phone_1', 'phone_2', 'phone_3', 'company_phone', 'contact_phone', 'phone'] as $field) {
+        if (!empty($record[$field]) && $record[$field] !== $phone) {
+          $additionalPhones[] = $record[$field];
+        }
+      }
       $additionalPhones = array_unique(array_filter($additionalPhones));
       
       $email = $record['email'] ?? '';
@@ -3007,9 +3010,10 @@ function parseCsvFile($filePath) {
 function mapOutscraperRecord($record) {
   $companyName = $record['name'] ?? $record['title'] ?? $record['business_name'] ?? '';
   
-  $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? '';
+  // Improved phone mapping to check more possible column names
+  $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? $record['phone_1'] ?? $record['phone_2'] ?? '';
   $additionalPhones = [];
-  foreach (['phone_1', 'phone_2', 'phone_3', 'company_phone', 'contact_phone'] as $field) {
+  foreach (['phone_1', 'phone_2', 'phone_3', 'company_phone', 'contact_phone', 'phone'] as $field) {
     if (!empty($record[$field]) && $record[$field] !== $phone) {
       $additionalPhones[$record[$field]] = $record[$field];
     }
