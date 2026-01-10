@@ -3015,9 +3015,9 @@ function mapOutscraperRecord($record) {
     }
   }
   
-  $email = $record['email'] ?? $record['contact_email'] ?? $record['company_email'] ?? '';
+  $email = $record['email'] ?? $record['contact_email'] ?? $record['company_email'] ?? $record['email_1'] ?? $record['email_2'] ?? '';
   $additionalEmails = [];
-  foreach (['email_1', 'email_2', 'email_3', 'company_email', 'contact_email'] as $field) {
+  foreach (['email_1', 'email_2', 'email_3', 'company_email', 'contact_email', 'email'] as $field) {
     if (!empty($record[$field]) && $record[$field] !== $email) {
       $additionalEmails[$record[$field]] = $record[$field];
     }
@@ -5368,8 +5368,8 @@ if (isset($_GET['background'])) {
             </td>
             <td style="white-space: nowrap;">${phoneDisplay}</td>
             <td>
-              <div style="font-size: 12px; color: var(--kt-blue);">${isHidden ? '***' : (lead.email || '')}</div>
-              ${lead.website && !isHidden ? `<div style="font-size: 11px;"><a href="${lead.website}" target="_blank" style="color: var(--muted); text-decoration: none;">🌐 Website</a></div>` : ''}
+              <div style="font-size: 12px; color: var(--kt-blue); font-weight: 500;">${isHidden ? '***' : (lead.email || '-')}</div>
+              ${lead.website && !isHidden ? `<div style="font-size: 11px; margin-top: 4px;"><a href="${lead.website}" target="_blank" style="color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--muted);">🌐 Visit Website</a></div>` : ''}
             </td>
             <td>${lead.company || '-'}</td>
             <td><span style="font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">${lead.industry || '-'}</span></td>
@@ -7126,7 +7126,7 @@ if (isset($_GET['background'])) {
                     <td style="padding: 8px 6px; text-align: center;"><input type="checkbox" class="staging-checkbox" value="${item.id}"></td>
                     <td style="padding: 8px 6px; font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.name || ''}">${item.name || '-'}</td>
                     <td style="padding: 8px 6px; white-space: nowrap;">${item.phone || '-'}</td>
-                    <td style="padding: 8px 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kt-blue);" title="${item.email || ''}">${item.email || '-'}</td>
+                    <td style="padding: 8px 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kt-blue); font-size: 11px;" title="${item.email || ''}">${item.email || '-'}</td>
                     <td style="padding: 8px 6px;"><span style="background: var(--bg); padding: 2px 6px; border-radius: 10px; font-size: 11px; white-space: nowrap;">${item.industry || '-'}</span></td>
                     <td style="padding: 8px 6px; text-align: center;">${item.rating ? '⭐ ' + parseFloat(item.rating).toFixed(1) : '-'}</td>
                     <td style="padding: 8px 6px; text-align: center;">${item.reviews_count || '-'}</td>
