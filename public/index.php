@@ -5443,16 +5443,18 @@ if (isset($_GET['background'])) {
     
     async function openLeadForm(id = null) {
       const industries = await api('industries.list');
+      const users = await api('users.list');
       if (id) {
         const data = await api(`leads.list&q=`);
         const lead = data.items.find(l => l.id === id);
-        showLeadForm(lead, industries.items);
+        showLeadForm(lead, industries.items, users.items);
       } else {
-        showLeadForm(null, industries.items);
+        showLeadForm(null, industries.items, users.items);
       }
     }
     
-    function showLeadForm(lead, industries) {
+    function showLeadForm(lead, industries, users) {
+      const isAdmin = currentUser && currentUser.role === 'admin';
       showModal(`
         <h3>${lead ? 'Edit Lead' : 'Add Lead'}</h3>
         <form onsubmit="saveLead(event, ${lead ? lead.id : 'null'})">
@@ -5492,15 +5494,41 @@ if (isset($_GET['background'])) {
               <label>Reviews Count</label>
               <input type="number" name="reviews_count" value="${lead?.reviews_count || ''}" min="0">
             </div>
+            ${isAdmin ? `
+            <div class="form-group">
+              <label>Assigned To</label>
+              <select name="assigned_to">
+                <option value="">Unassigned (Global)</option>
+                ${users.filter(u => u.role === 'sales').map(u => `<option value="${u.id}" ${lead?.assigned_to == u.id ? 'selected' : ''}>${u.full_name}</option>`).join('')}
+              </select>
+            </div>
+            ` : ''}
           </div>
           <div class="form-group" style="margin-top: 16px;">
             <label>Address</label>
             <textarea name="address" rows="2">${lead?.address || ''}</textarea>
           </div>
-          <button type="submit" class="btn">Save</button>
-          <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button type="submit" class="btn">Save</button>
+            ${lead && isAdmin ? `<button type="button" class="btn danger" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
+            <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+          </div>
         </form>
       `);
+    }
+
+    async function deleteLead(id) {
+      if (!confirm('Are you sure you want to delete this lead?')) return;
+      try {
+        await api('leads.delete', {
+          method: 'POST',
+          body: JSON.stringify({ id })
+        });
+        closeModal();
+        renderLeads();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
 
     async function saveLead(e, id) {
@@ -5517,6 +5545,9 @@ if (isset($_GET['background'])) {
         rating: form.rating.value,
         reviews_count: form.reviews_count.value
       };
+      if (form.assigned_to) {
+        data.assigned_to = form.assigned_to.value || null;
+      }
       if (id) data.id = id;
       
       try {
