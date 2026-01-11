@@ -1,0 +1,100 @@
+[Sun Jan 11 01:01:34 2026] 172.18.0.6:42824 Accepted
+[Sun Jan 11 01:01:34 2026] 172.18.0.6:42816 Closing
+[Sun Jan 11 01:01:34 2026] 172.18.0.6:42824 Closing
+[Sun Jan 11 01:01:38 2026] 172.18.0.6:33856 Accepted
+[Sun Jan 11 01:01:38 2026] SMTP: Attempting to connect to mail.koaditech.com:465
+[Sun Jan 11 01:01:38 2026] SMTP: Connected successfully
+[Sun Jan 11 01:01:38 2026] SMTP: Server greeting: 220 mail.koaditech.com
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-koaditech-email-server Axigen ESMTP hello
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-PIPELINING
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-AUTH PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-AUTH=PLAIN LOGIN CRAM-MD5 DIGEST-MD5 GSSAPI
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-8BITMIME
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-BINARYMIME
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-CHUNKING
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-SIZE 104857600
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250-HELP
+[Sun Jan 11 01:01:38 2026] SMTP: EHLO response: 250 OK
+[Sun Jan 11 01:01:38 2026] SMTP: AUTH LOGIN response: 334 VXNlcm5hbWU6
+[Sun Jan 11 01:01:38 2026] SMTP: Username response: 334 UGFzc3dvcmQ6
+[Sun Jan 11 01:01:38 2026] SMTP: Password response: 235 Authentication successful
+[Sun Jan 11 01:01:38 2026] SMTP: MAIL FROM response: 250 Sender accepted
+[Sun Jan 11 01:01:38 2026] SMTP: RCPT TO response: 250 Recipient accepted
+[Sun Jan 11 01:01:38 2026] SMTP: DATA response: 354 Ready to receive data; remember .
+[Sun Jan 11 01:01:39 2026] SMTP: Send response: 250 Mail queued for delivery
+[Sun Jan 11 01:01:39 2026] SMTP: Email sent successfully to komla.anippah@koaditech.com
+[Sun Jan 11 01:01:39 2026] 172.18.0.6:33856 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35584 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35584 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35590 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35590 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35606 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35610 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35606 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35626 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35610 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35626 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35642 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35644 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35642 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35644 Closing
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35650 Accepted
+[Sun Jan 11 01:01:54 2026] 172.18.0.6:35650 Closing
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36728 Accepted
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36728 Closing
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36730 Accepted
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36730 Closing
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36738 Accepted
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36738 Closing
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36746 Accepted
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36746 Closing
+[Sun Jan 11 01:01:59 2026] 172.18.0.6:36750 Accepted
+[Sun Jan 11 01:02:00 2026] 172.18.0.6:36750 Closing
+[Sun Jan 11 01:02:10 2026] 172.18.0.6:34600 Accepted
+[Sun Jan 11 01:02:10 2026] 172.18.0.6:34600 Closing
+[Sun Jan 11 01:02:32 2026] 172.18.0.6:45162 Accepted
+[Sun Jan 11 01:02:32 2026] 172.18.0.6:45162 Closing
+[Sun Jan 11 01:02:53 2026] 172.18.0.6:47712 Accepted
+[Sun Jan 11 01:02:54 2026] 172.18.0.6:47712 Closing
+[Sun Jan 11 01:03:23 2026] 172.18.0.6:46004 Accepted
+[Sun Jan 11 01:03:24 2026] 172.18.0.6:46004 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37818 Accepted
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37818 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37824 Accepted
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37824 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37828 Accepted
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37828 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37840 Accepted
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37850 Accepted
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37840 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37850 Closing
+[Sun Jan 11 01:03:28 2026] 172.18.0.6:37858 Accepted
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37858 Closing
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37860 Accepted
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37860 Closing
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37870 Accepted
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37870 Closing
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37884 Accepted
+[Sun Jan 11 01:03:29 2026] 172.18.0.6:37884 Closing
+[Sun Jan 11 01:03:34 2026] 172.18.0.6:37896 Accepted
+[Sun Jan 11 01:03:34 2026] 172.18.0.6:37896 Closing
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56408 Accepted
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56408 Closing
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56414 Accepted
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56414 Closing
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56422 Accepted
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56422 Closing
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56432 Accepted
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56434 Accepted
+[Sun Jan 11 01:03:41 2026] 172.18.0.6:56432 Closing
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56434 Closing
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56448 Accepted
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56448 Closing
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56458 Accepted
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56458 Closing
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56472 Accepted
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56472 Closing
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56474 Accepted
+[Sun Jan 11 01:03:42 2026] 172.18.0.6:56474 Closing
+[Sun Jan 11 01:03:48 2026] 172.18.0.6:51156 Accepted
+[Sun Jan 11 01:03:48 2026] 172.18.0.6:51156 Closing
