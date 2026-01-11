@@ -5189,9 +5189,11 @@ if (isset($_GET['background'])) {
       const tbody = document.querySelector('#leadsTable tbody');
       const pagination = document.getElementById('leadsPagination');
       
+      if (!tbody) return;
+      
       if (data.items.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted);">No leads found</td></tr>';
-        pagination.innerHTML = '';
+        if (pagination) pagination.innerHTML = '';
         return;
       }
       
@@ -5226,6 +5228,7 @@ if (isset($_GET['background'])) {
               <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                 ${canGrab ? `<button class="btn success" style="padding: 4px 8px; font-size: 11px;" onclick="grabLead(${lead.id})">Grab</button>` : ''}
                 ${canView && !isHidden ? `<button class="btn secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openLeadForm(${lead.id})">Edit</button>` : ''}
+                ${currentUser.role === 'admin' ? `<button class="btn danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteLead(${lead.id})">Delete</button>` : ''}
                 ${canView && !isHidden && currentUser.role === 'sales' ? `<button class="btn" style="background: #FF8C42; color: white; padding: 4px 8px; font-size: 11px;" onclick="convertLeadToContact(${lead.id})">Convert</button>` : ''}
               </div>
             </td>
@@ -5284,7 +5287,7 @@ if (isset($_GET['background'])) {
         paginationHTML += '</div>';
       }
       
-      pagination.innerHTML = paginationHTML;
+      if (pagination) pagination.innerHTML = paginationHTML;
     }
     
     async function grabLead(id) {
