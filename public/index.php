@@ -5537,7 +5537,7 @@ if (isset($_GET['background'])) {
           method: 'POST'
         });
         closeModal();
-        renderLeads();
+        await loadLeads();
       } catch (e) {
         alert('Error: ' + e.message);
       }
@@ -5568,16 +5568,6 @@ if (isset($_GET['background'])) {
           body: JSON.stringify(data)
         });
         closeModal();
-        await loadLeads();
-      } catch (e) {
-        alert('Error: ' + e.message);
-      }
-    }
-    
-    async function deleteLead(id) {
-      if (!confirm('Delete this lead?')) return;
-      try {
-        await api(`leads.delete&id=${id}`, { method: 'DELETE' });
         await loadLeads();
       } catch (e) {
         alert('Error: ' + e.message);
