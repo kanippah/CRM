@@ -10,10 +10,16 @@ I prefer clear, concise communication. When suggesting code changes, please expl
 The CRM is implemented as a single-file PHP application (`public/index.php`) leveraging PostgreSQL as its primary database.
 
 **UI/UX Decisions:**
-- **Theming:** Features light/dark mode toggle.
+- **Modern Design System (Jan 2026):** Complete UI redesign with professional, modern styling featuring Inter font family, enhanced color palette with success/danger/warning utility colors, 8px spacing grid, refined shadows (sm/md/lg/xl), and smooth animations (150-300ms transitions).
+- **Theming:** Features light/dark mode toggle with enhanced theme variables including panel-hover, bg-subtle, brand-light, accent-light, and tooltip colors.
+- **Tooltip System:** Interactive tooltips on all navigation items and key UI elements using data-tooltip attributes with smooth fade-in animations and support for top/bottom positioning.
 - **Branding:** Integrates Koadi Technology branding elements including logo, favicon, and a specific color palette (Orange #FF8C42, Blue #0066CC, Yellow #FFC72C).
-- **Navigation:** Utilizes a sidebar navigation for ease of access with page persistence on browser refresh.
-- **Responsiveness:** Designed to be responsive across various devices with platform-wide text size at 80% for better content density.
+- **Navigation:** Modern sidebar navigation with icon labels, gradient active states, animated hover effects (left accent bar), and improved visual hierarchy. Logout and theme toggle moved to sidebar footer.
+- **Dashboard Stats:** Redesigned stat cards with colored accent bars, emoji icons, and hover animations.
+- **Cards & Tables:** Enhanced with rounded corners (radius-lg), subtle shadows, zebra-striped table rows, sticky headers, and hover effects.
+- **Buttons:** Gradient backgrounds, hover lift effects, and multiple variants (primary, secondary, danger, success, warning, ghost).
+- **Forms & Modals:** Modern form inputs with focus rings, modal animations (fade-in and slide-in), gradient modal headers, and improved spacing.
+- **Responsiveness:** Designed to be responsive across various devices with Inter font and refined typography scale.
 - **Kanban:** Implements a drag-and-drop Kanban board for project visualization, with color-coded, fixed-width cards featuring text truncation.
 
 **Technical Implementations:**
