@@ -5180,7 +5180,9 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
-        const phoneDisplay = isHidden ? '***' : (lead.phone && String(lead.phone).toLowerCase() !== 'undefined' && String(lead.phone).toLowerCase() !== 'null' ? makePhoneClickable('', lead.phone, lead.name) : '-');
+        const phoneDisplay = isHidden ? '***' : (lead.phone && String(lead.phone).trim() !== '' && String(lead.phone).toLowerCase() !== 'undefined' && String(lead.phone).toLowerCase() !== 'null' ? makePhoneClickable('', lead.phone, lead.name) : '-');
+        
+        const emailDisplay = isHidden ? '***' : (lead.email && String(lead.email).trim() !== '' && String(lead.email).toLowerCase() !== 'undefined' && String(lead.email).toLowerCase() !== 'null' ? lead.email : '-');
         
         return `
           <tr>
@@ -5190,11 +5192,11 @@ if (isset($_GET['background'])) {
             </td>
             <td style="white-space: nowrap;">${phoneDisplay}</td>
             <td>
-              <div style="font-size: 12px; color: var(--kt-blue); font-weight: 500;">${isHidden ? '***' : (lead.email || '-')}</div>
+              <div style="font-size: 12px; color: var(--kt-blue); font-weight: 500;">${emailDisplay}</div>
               ${lead.website && !isHidden ? `<div style="font-size: 11px; margin-top: 4px;"><a href="${lead.website}" target="_blank" style="color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--muted);">🌐 Visit Website</a></div>` : ''}
             </td>
-            <td>${lead.company || '-'}</td>
-            <td><span style="font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">${lead.industry || '-'}</span></td>
+            <td>${lead.company && String(lead.company).toLowerCase() !== 'undefined' && String(lead.company).toLowerCase() !== 'null' ? lead.company : '-'}</td>
+            <td><span style="font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border);">${lead.industry && String(lead.industry).toLowerCase() !== 'undefined' && String(lead.industry).toLowerCase() !== 'null' ? lead.industry : '-'}</span></td>
             <td><span class="badge ${lead.status}">${lead.status}</span></td>
             <td>${lead.assigned_name || '-'}</td>
             <td>
