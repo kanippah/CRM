@@ -2810,6 +2810,9 @@ function mapOutscraperRecord($record) {
   $companyName = $record['name'] ?? $record['title'] ?? $record['business_name'] ?? '';
   
   $phone = $record['contact_phone'] ?? $record['phone'] ?? $record['company_phone'] ?? $record['phone_1'] ?? $record['phone_2'] ?? '';
+  if (is_null($phone) || (is_string($phone) && (strtolower(trim($phone)) === 'undefined' || strtolower(trim($phone)) === 'null'))) {
+    $phone = '';
+  }
   
   // Handle plural company_phones which might be an array or comma-separated string
   if (empty($phone) && !empty($record['company_phones'])) {
@@ -3064,9 +3067,12 @@ function api_outscraper_staging_approve() {
       }
     }
     
+    $phone = $row['phone'];
+    if ($phone === 'undefined' || $phone === 'null') $phone = '';
+    
     $insertStmt->execute([
       ':name' => $row['name'],
-      ':phone' => $row['phone'],
+      ':phone' => $phone,
       ':email' => $row['email'],
       ':company' => $row['company'],
       ':address' => $row['address'],
@@ -3975,8 +3981,12 @@ if (isset($_GET['background'])) {
     
     // Helper function to format phone for display
     function makePhoneClickable(phoneCountry, phoneNumber, contactName = '') {
-      if (!phoneNumber) return '';
-      const fullNumber = (phoneCountry || '') + phoneNumber;
+      if (!phoneNumber || phoneNumber === 'undefined' || phoneNumber === 'null') return '';
+      const cleanPhone = (phoneCountry || '') + phoneNumber.toString().replace(/\D/g, '');
+      if (!cleanPhone) return phoneNumber;
+      return `<a href="tel:${cleanPhone}" class="phone-link" onclick="event.stopPropagation(); logCallFromLink('${cleanPhone}', '${contactName}')" title="Click to call">
+        <i class="fas fa-phone-alt"></i> ${phoneCountry || ''}${phoneNumber}
+      </a>`;
     }
     
     async function api(endpoint, options = {}) {
