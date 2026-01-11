@@ -1297,8 +1297,21 @@ function api_leads_save() {
   $can_create_global = $_SESSION['role'] === 'admin' || !empty($_SESSION['can_manage_global_leads']);
   
   if ($id) {
-    $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, industry=:i, updated_at=now() WHERE id=:id RETURNING *");
-    $stmt->execute([':n' => $name, ':p' => $phone, ':e' => $email, ':c' => $company, ':a' => $address, ':i' => $industry, ':id' => $id]);
+    $assigned_to = isset($b['assigned_to']) ? ($b['assigned_to'] === '' ? null : (int)$b['assigned_to']) : null;
+    $status = $assigned_to ? 'assigned' : 'global';
+    
+    $stmt = $pdo->prepare("UPDATE leads SET name=:n, phone=:p, email=:e, company=:c, address=:a, industry=:i, assigned_to=:at, status=:s, updated_at=now() WHERE id=:id RETURNING *");
+    $stmt->execute([
+      ':n' => $name, 
+      ':p' => $phone, 
+      ':e' => $email, 
+      ':c' => $company, 
+      ':a' => $address, 
+      ':i' => $industry, 
+      ':at' => $assigned_to,
+      ':s' => $status,
+      ':id' => $id
+    ]);
   } else {
     if ($can_create_global) {
       $stmt = $pdo->prepare("INSERT INTO leads (name, phone, email, company, address, industry, status) VALUES (:n, :p, :e, :c, :a, :i, 'global') RETURNING *");
@@ -5520,9 +5533,8 @@ if (isset($_GET['background'])) {
     async function deleteLead(id) {
       if (!confirm('Are you sure you want to delete this lead?')) return;
       try {
-        await api('leads.delete', {
-          method: 'POST',
-          body: JSON.stringify({ id })
+        await api(`leads.delete&id=${id}`, {
+          method: 'POST'
         });
         closeModal();
         renderLeads();
