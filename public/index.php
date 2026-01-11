@@ -1,6 +1,7 @@
 <?php
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 session_start();
 
@@ -5179,7 +5180,7 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
-        const phoneDisplay = isHidden ? '***' : (lead.phone ? makePhoneClickable('', lead.phone, lead.name) : '-');
+        const phoneDisplay = isHidden ? '***' : (lead.phone && lead.phone !== 'undefined' && lead.phone !== 'null' ? makePhoneClickable('', lead.phone, lead.name) : '-');
         
         return `
           <tr>
