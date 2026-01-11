@@ -5180,7 +5180,7 @@ if (isset($_GET['background'])) {
         const displayName = lead.name;
         const nameDisplay = canView && !isHidden ? `<a href="#" onclick="viewLead(${lead.id}); return false;" style="color: var(--brand); text-decoration: none; font-weight: bold;">${displayName}</a>` : `<strong>${displayName}</strong>`;
         
-        const phoneDisplay = isHidden ? '***' : (lead.phone && lead.phone !== 'undefined' && lead.phone !== 'null' ? makePhoneClickable('', lead.phone, lead.name) : '-');
+        const phoneDisplay = isHidden ? '***' : (lead.phone && String(lead.phone).toLowerCase() !== 'undefined' && String(lead.phone).toLowerCase() !== 'null' ? makePhoneClickable('', lead.phone, lead.name) : '-');
         
         return `
           <tr>
