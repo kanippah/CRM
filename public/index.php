@@ -3706,14 +3706,6 @@ if (isset($_GET['background'])) {
       .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
     }
     
-      font-size: 20px;
-      color: var(--muted);
-      cursor: pointer;
-      padding: 0;
-      width: 24px;
-      height: 24px;
-    }
-    
     .call-widget-body {
       text-align: center;
     }
@@ -3983,6 +3975,7 @@ if (isset($_GET['background'])) {
   
   
   <script>
+    console.log('Script loaded');
     let currentUser = null;
     let currentView = 'leads';
     let currentLeadTab = localStorage.getItem('crm_lead_tab') || 'global';
@@ -3997,8 +3990,8 @@ if (isset($_GET['background'])) {
       if (!phoneNumber || phoneNumber === 'undefined' || phoneNumber === 'null') return '';
       const cleanPhone = (phoneCountry || '') + phoneNumber.toString().replace(/\D/g, '');
       if (!cleanPhone) return phoneNumber;
-      return `<a href="tel:${cleanPhone}" class="phone-link" onclick="event.stopPropagation(); logCallFromLink('${cleanPhone}', '${contactName}')" title="Click to call">
-        <i class="fas fa-phone-alt"></i> ${phoneCountry || ''}${phoneNumber}
+      return `<a href="tel:${cleanPhone}" class="phone-link" onclick="event.stopPropagation();" title="Click to call">
+        ${phoneCountry || ''}${phoneNumber}
       </a>`;
     }
     
@@ -4013,32 +4006,41 @@ if (isset($_GET['background'])) {
     }
     
     async function checkSession() {
+      console.log('checkSession starting');
       try {
         const data = await api('session');
+        console.log('session response:', data);
         currentUser = data.user;
         if (currentUser) {
+          console.log('rendering app');
           renderApp();
         } else {
+          console.log('rendering login');
           renderLogin();
         }
       } catch (e) {
+        console.log('checkSession error:', e.message);
         renderLogin();
       }
     }
     
     function renderLogin() {
+      console.log('renderLogin called');
       const inviteToken = new URLSearchParams(window.location.search).get('invite_token');
       if (inviteToken) {
+        console.log('redirecting to accept invite');
         renderAcceptInvite(inviteToken);
         return;
       }
       
       const magicToken = new URLSearchParams(window.location.search).get('magic_token');
       if (magicToken) {
+        console.log('verifying magic link');
         verifyMagicLink(magicToken);
         return;
       }
       
+      console.log('setting login HTML');
       document.getElementById('app').innerHTML = `
         <div class="login-container">
           <div class="login-box">
@@ -4225,8 +4227,10 @@ if (isset($_GET['background'])) {
     }
     
     function renderApp() {
+      console.log('renderApp called, isAdmin:', currentUser.role === 'admin');
       const isAdmin = currentUser.role === 'admin';
       
+      console.log('About to set app innerHTML');
       document.getElementById('app').innerHTML = `
         <button class="sidebar-toggle shifted" onclick="toggleSidebar()">✕</button>
         <div class="app">
@@ -4321,8 +4325,11 @@ if (isset($_GET['background'])) {
         </nav>
       `;
       
+      console.log('innerHTML set, app content length:', document.getElementById('app').innerHTML.length);
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
+      console.log('switching to view:', savedView);
       switchView(savedView);
+      console.log('renderApp complete');
     }
     
     function switchView(view) {
