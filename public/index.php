@@ -3197,44 +3197,187 @@ if (isset($_GET['background'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Koadi Technology CRM</title>
   <link rel="icon" href="?favicon" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
+      /* Brand Colors */
       --kt-orange: #FF8C42;
       --kt-blue: #0066CC;
       --kt-yellow: #FFC72C;
       --kt-dark-blue: #003366;
+      
+      /* Utility Colors */
+      --success: #10b981;
+      --success-hover: #059669;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --warning: #f59e0b;
+      --info: #3b82f6;
+      
+      /* Spacing Scale (8px grid) */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      
+      /* Border Radius */
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-full: 9999px;
+      
+      /* Shadows */
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      
+      /* Animation */
+      --transition-fast: 150ms ease;
+      --transition-base: 200ms ease;
+      --transition-slow: 300ms ease;
+      
+      /* Typography */
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --text-xs: 0.75rem;
+      --text-sm: 0.8125rem;
+      --text-base: 0.875rem;
+      --text-lg: 1rem;
+      --text-xl: 1.125rem;
+      --text-2xl: 1.375rem;
+      --text-3xl: 1.625rem;
     }
     
     [data-theme="light"] {
-      --bg: #f8f9fa;
+      --bg: #f1f5f9;
+      --bg-subtle: #e2e8f0;
       --panel: #ffffff;
-      --text: #212529;
-      --muted: #6c757d;
-      --border: #dee2e6;
+      --panel-hover: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #475569;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
       --brand: var(--kt-blue);
       --brand-hover: var(--kt-dark-blue);
+      --brand-light: rgba(0, 102, 204, 0.1);
       --accent: var(--kt-orange);
+      --accent-light: rgba(255, 140, 66, 0.1);
+      --shadow-color: rgba(0, 0, 0, 0.08);
+      --tooltip-bg: #1e293b;
+      --tooltip-text: #f8fafc;
     }
     
     [data-theme="dark"] {
       --bg: #0f172a;
+      --bg-subtle: #1e293b;
       --panel: #1e293b;
-      --text: #e2e8f0;
+      --panel-hover: #334155;
+      --text: #f1f5f9;
+      --text-secondary: #cbd5e1;
       --muted: #94a3b8;
       --border: #334155;
-      --brand: var(--kt-blue);
-      --brand-hover: #0052a3;
+      --border-strong: #475569;
+      --brand: #3b82f6;
+      --brand-hover: #2563eb;
+      --brand-light: rgba(59, 130, 246, 0.15);
       --accent: var(--kt-orange);
+      --accent-light: rgba(255, 140, 66, 0.15);
+      --shadow-color: rgba(0, 0, 0, 0.3);
+      --tooltip-bg: #f1f5f9;
+      --tooltip-text: #1e293b;
     }
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: var(--font-sans);
       background: var(--bg);
       color: var(--text);
-      transition: background 0.3s, color 0.3s;
-      font-size: 80%;
+      transition: background var(--transition-base), color var(--transition-base);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Tooltip System */
+    [data-tooltip] {
+      position: relative;
+      cursor: help;
+    }
+    
+    [data-tooltip]::before,
+    [data-tooltip]::after {
+      position: absolute;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity var(--transition-fast), transform var(--transition-fast);
+      z-index: 10000;
+    }
+    
+    [data-tooltip]::before {
+      content: attr(data-tooltip);
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      padding: 8px 12px;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-text);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      white-space: nowrap;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      max-width: 280px;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.4;
+    }
+    
+    [data-tooltip]::after {
+      content: '';
+      bottom: calc(100% + 2px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      border: 6px solid transparent;
+      border-top-color: var(--tooltip-bg);
+    }
+    
+    [data-tooltip]:hover::before,
+    [data-tooltip]:hover::after,
+    [data-tooltip]:focus::before,
+    [data-tooltip]:focus::after {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+    
+    [data-tooltip-pos="bottom"]::before {
+      bottom: auto;
+      top: calc(100% + 8px);
+      transform: translateX(-50%) translateY(-4px);
+    }
+    
+    [data-tooltip-pos="bottom"]::after {
+      bottom: auto;
+      top: calc(100% + 2px);
+      border-top-color: transparent;
+      border-bottom-color: var(--tooltip-bg);
+      transform: translateX(-50%) translateY(-4px);
+    }
+    
+    [data-tooltip-pos="bottom"]:hover::before,
+    [data-tooltip-pos="bottom"]:hover::after {
+      transform: translateX(-50%) translateY(0);
     }
     
     .app { display: flex; height: 100vh; }
@@ -3243,9 +3386,12 @@ if (isset($_GET['background'])) {
       width: 280px;
       background: var(--panel);
       border-right: 1px solid var(--border);
-      padding: 20px;
+      padding: var(--space-6);
       overflow-y: auto;
-      transition: transform 0.3s, width 0.3s;
+      transition: transform var(--transition-slow), width var(--transition-slow);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
     }
     
     .sidebar.collapsed {
@@ -3256,150 +3402,378 @@ if (isset($_GET['background'])) {
     
     .sidebar-toggle {
       position: fixed;
-      top: 20px;
-      left: 20px;
+      top: var(--space-5);
+      left: var(--space-5);
       z-index: 1000;
-      background: var(--brand);
+      background: linear-gradient(135deg, var(--brand), var(--brand-hover));
       color: white;
       border: none;
-      border-radius: 6px;
-      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
       cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      font-size: 16px;
-      font-weight: bold;
+      transition: all var(--transition-base);
+      box-shadow: var(--shadow-lg);
+      font-size: var(--text-lg);
+      font-weight: 600;
+    }
+    
+    .sidebar-toggle:hover {
+      transform: scale(1.05);
+      box-shadow: var(--shadow-xl);
     }
     
     .sidebar-toggle.shifted {
-      left: 240px;
+      left: 248px;
     }
     
     .logo-area {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 24px;
-      padding-bottom: 20px;
+      gap: var(--space-3);
+      margin-bottom: var(--space-6);
+      padding-bottom: var(--space-5);
       border-bottom: 2px solid var(--accent);
     }
     
     .logo-area img { width: 140px; height: auto; }
     
     .user-info {
-      background: var(--bg);
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      border-left: 3px solid var(--accent);
+      background: linear-gradient(135deg, var(--brand-light), var(--accent-light));
+      padding: var(--space-4);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-5);
+      border-left: 4px solid var(--accent);
+      box-shadow: var(--shadow-sm);
     }
     
     .user-info strong { color: var(--brand); }
+    .user-info small { color: var(--muted); font-size: var(--text-xs); }
     
-    .nav { display: flex; flex-direction: column; gap: 8px; }
+    .nav { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; }
     
     .nav button {
-      padding: 12px;
+      padding: var(--space-3) var(--space-4);
       border: none;
       background: transparent;
       color: var(--text);
       text-align: left;
       cursor: pointer;
-      border-radius: 6px;
-      font-size: 14px;
-      transition: all 0.2s;
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      transition: all var(--transition-base);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      position: relative;
     }
     
-    .nav button:hover { background: var(--bg); }
-    .nav button.active { background: var(--brand); color: white; }
+    .nav button::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%) scaleY(0);
+      width: 4px;
+      height: 60%;
+      background: var(--accent);
+      border-radius: var(--radius-full);
+      transition: transform var(--transition-base);
+    }
     
-    .content { flex: 1; padding: 24px; overflow-y: auto; transition: padding-left 0.3s; }
+    .nav button:hover { 
+      background: var(--bg-subtle); 
+      padding-left: var(--space-5);
+    }
+    
+    .nav button:hover::before {
+      transform: translateY(-50%) scaleY(1);
+    }
+    
+    .nav button.active { 
+      background: linear-gradient(135deg, var(--brand), var(--brand-hover)); 
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+    
+    .nav button.active::before {
+      display: none;
+    }
+    
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      opacity: 0.8;
+    }
+    
+    .content { 
+      flex: 1; 
+      padding: var(--space-6); 
+      overflow-y: auto; 
+      transition: padding-left var(--transition-slow);
+      background: var(--bg);
+    }
     
     body.sidebar-collapsed .content {
       padding-left: 80px;
     }
     
+    .page-header {
+      margin-bottom: var(--space-6);
+    }
+    
+    .page-header h1 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: var(--space-2);
+    }
+    
+    .page-header p {
+      color: var(--muted);
+      font-size: var(--text-sm);
+    }
+    
     .toolbar {
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: var(--space-5);
       flex-wrap: wrap;
+      padding: var(--space-4);
+      background: var(--panel);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
     }
     
     .btn {
-      padding: 10px 16px;
+      padding: var(--space-3) var(--space-5);
       border: none;
-      background: var(--brand);
+      background: linear-gradient(135deg, var(--brand), var(--brand-hover));
       color: white;
-      border-radius: 6px;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background 0.2s;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      transition: all var(--transition-base);
+      box-shadow: var(--shadow-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      text-decoration: none;
     }
     
-    .btn:hover { background: var(--brand-hover); }
-    .btn.secondary { background: var(--muted); }
-    .btn.danger { background: #dc3545; }
-    .btn.success { background: #28a745; }
-    .btn.warning { background: var(--accent); }
+    .btn:hover { 
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn.secondary { 
+      background: var(--bg-subtle);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    
+    .btn.secondary:hover {
+      background: var(--border);
+    }
+    
+    .btn.danger { 
+      background: linear-gradient(135deg, var(--danger), var(--danger-hover));
+    }
+    
+    .btn.success { 
+      background: linear-gradient(135deg, var(--success), var(--success-hover));
+    }
+    
+    .btn.warning { 
+      background: linear-gradient(135deg, var(--warning), #d97706);
+    }
+    
+    .btn.ghost {
+      background: transparent;
+      color: var(--text);
+      box-shadow: none;
+    }
+    
+    .btn.ghost:hover {
+      background: var(--bg-subtle);
+    }
+    
+    .btn-sm {
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-xs);
+    }
+    
+    .btn-lg {
+      padding: var(--space-4) var(--space-6);
+      font-size: var(--text-base);
+    }
     
     .search {
       flex: 1;
       max-width: 400px;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
       background: var(--panel);
       color: var(--text);
+      font-size: var(--text-sm);
+      transition: all var(--transition-base);
+    }
+    
+    .search:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px var(--brand-light);
+    }
+    
+    .search::placeholder {
+      color: var(--muted);
     }
     
     select {
-      background: var(--bg);
+      background: var(--panel);
       color: var(--text);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      cursor: pointer;
+      transition: all var(--transition-base);
+    }
+    
+    select:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px var(--brand-light);
     }
     
     select option {
-      background: var(--bg);
+      background: var(--panel);
       color: var(--text);
     }
     
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      margin-bottom: var(--space-5);
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-base);
     }
     
-    .card h2 { margin-bottom: 16px; color: var(--brand); }
+    .card:hover {
+      box-shadow: var(--shadow-md);
+    }
+    
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-5);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .card h2 { 
+      margin-bottom: 0; 
+      color: var(--text);
+      font-size: var(--text-xl);
+      font-weight: 600;
+    }
+    
+    .card h2 + p {
+      color: var(--muted);
+      font-size: var(--text-sm);
+      margin-top: var(--space-1);
+    }
     
     table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
     }
     
     th, td {
-      padding: 12px 8px;
+      padding: var(--space-4) var(--space-3);
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
     
     th {
-      background: var(--bg);
+      background: var(--bg-subtle);
       font-weight: 600;
-      color: var(--brand);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    th:first-child {
+      border-top-left-radius: var(--radius-md);
+    }
+    
+    th:last-child {
+      border-top-right-radius: var(--radius-md);
     }
     
     tbody tr {
-      transition: background-color 0.2s ease;
+      transition: all var(--transition-fast);
     }
     
     tbody tr:hover {
-      background-color: var(--border);
+      background-color: var(--panel-hover);
       cursor: pointer;
+    }
+    
+    tbody tr:nth-child(even) {
+      background-color: var(--bg-subtle);
+    }
+    
+    tbody tr:nth-child(even):hover {
+      background-color: var(--panel-hover);
+    }
+    
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    .status-badge.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+    }
+    
+    .status-badge.warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+    }
+    
+    .status-badge.danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+    
+    .status-badge.info {
+      background: var(--brand-light);
+      color: var(--brand);
     }
     
     .modal {
@@ -3408,112 +3782,337 @@ if (isset($_GET['background'])) {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      padding: var(--space-4);
+      animation: modalFadeIn var(--transition-base);
+    }
+    
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes modalSlideIn {
+      from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     
     .modal-content {
       background: var(--panel);
-      padding: 24px;
-      border-radius: 8px;
+      border-radius: var(--radius-xl);
       max-width: 600px;
-      width: 90%;
+      width: 100%;
       max-height: 90vh;
-      overflow-y: auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-xl);
+      animation: modalSlideIn var(--transition-base);
     }
     
-    .modal h3 { margin-bottom: 16px; color: var(--brand); }
+    .modal-header {
+      padding: var(--space-5) var(--space-6);
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--brand-light), var(--accent-light));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .modal-header h3 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: var(--text-xl);
+      color: var(--muted);
+      cursor: pointer;
+      padding: var(--space-2);
+      border-radius: var(--radius-sm);
+      transition: all var(--transition-fast);
+      line-height: 1;
+    }
+    
+    .modal-close:hover {
+      background: var(--bg-subtle);
+      color: var(--text);
+    }
+    
+    .modal-body {
+      padding: var(--space-6);
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .modal-footer {
+      padding: var(--space-4) var(--space-6);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: var(--space-3);
+      justify-content: flex-end;
+      background: var(--bg-subtle);
+    }
+    
+    .modal h3 { margin-bottom: var(--space-4); color: var(--text); font-weight: 600; }
     
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: var(--space-5);
     }
     
     .form-group label {
       display: block;
-      margin-bottom: 6px;
+      margin-bottom: var(--space-2);
       font-weight: 500;
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+    }
+    
+    .form-group label .required {
+      color: var(--danger);
+      margin-left: var(--space-1);
     }
     
     .form-group input, .form-group select, .form-group textarea {
       width: 100%;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
       background: var(--bg);
       color: var(--text);
       font-family: inherit;
+      font-size: var(--text-sm);
+      transition: all var(--transition-base);
+    }
+    
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px var(--brand-light);
+    }
+    
+    .form-group input::placeholder, .form-group textarea::placeholder {
+      color: var(--muted);
+    }
+    
+    .form-group .helper-text {
+      margin-top: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--muted);
     }
     
     .form-group textarea { min-height: 100px; resize: vertical; }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-4);
+    }
+    
+    @media (max-width: 600px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
     
     .login-container {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background-image: linear-gradient(135deg, rgba(0, 102, 204, 0.15), rgba(0, 51, 102, 0.15)), url('?background');
+      background-image: linear-gradient(135deg, rgba(0, 102, 204, 0.2), rgba(0, 51, 102, 0.3)), url('?background');
       background-position: center;
       background-size: cover;
       background-repeat: no-repeat;
       background-attachment: fixed;
+      padding: var(--space-4);
     }
     
     .login-box {
       background: var(--panel);
-      padding: 40px;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: var(--space-10);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
       text-align: center;
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
     }
     
-    .login-box img { width: 200px; margin-bottom: 24px; }
+    .login-box img { 
+      width: 180px; 
+      margin-bottom: var(--space-6);
+    }
+    
+    .login-box h2 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: var(--space-3);
+    }
+    
+    .login-box p {
+      color: var(--muted);
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-6);
+      line-height: 1.6;
+    }
+    
+    .login-box form {
+      text-align: left;
+    }
+    
+    .login-box .btn {
+      width: 100%;
+      padding: var(--space-4);
+      font-size: var(--text-base);
+      justify-content: center;
+    }
     
     .theme-toggle {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      border-radius: 6px;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
       cursor: pointer;
       margin-left: auto;
+      font-size: var(--text-lg);
+      transition: all var(--transition-base);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    
+    .theme-toggle:hover {
+      border-color: var(--brand);
+      background: var(--brand-light);
     }
     
     .badge {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
     }
     
     .badge.global { background: var(--kt-yellow); color: #000; }
     .badge.assigned { background: var(--kt-blue); color: white; }
     
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-5);
+      margin-bottom: var(--space-6);
+    }
+    
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      transition: all var(--transition-base);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(135deg, var(--brand), var(--accent));
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .stat-card .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xl);
+      margin-bottom: var(--space-2);
+    }
+    
+    .stat-card .stat-value {
+      font-size: var(--text-3xl);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    
+    .stat-card .stat-label {
+      font-size: var(--text-sm);
+      color: var(--muted);
+      font-weight: 500;
+    }
+    
+    .stat-card.brand .stat-icon { background: var(--brand-light); color: var(--brand); }
+    .stat-card.brand::before { background: var(--brand); }
+    
+    .stat-card.accent .stat-icon { background: var(--accent-light); color: var(--accent); }
+    .stat-card.accent::before { background: var(--accent); }
+    
+    .stat-card.success .stat-icon { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .stat-card.success::before { background: var(--success); }
+    
+    .stat-card.warning .stat-icon { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+    .stat-card.warning::before { background: var(--warning); }
+    
     .tabs {
       display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      border-bottom: 2px solid var(--border);
+      gap: var(--space-1);
+      margin-bottom: var(--space-5);
+      background: var(--bg-subtle);
+      padding: var(--space-1);
+      border-radius: var(--radius-md);
+      width: fit-content;
     }
     
     .tabs button {
-      padding: 12px 20px;
+      padding: var(--space-3) var(--space-5);
       border: none;
       background: transparent;
       color: var(--muted);
       cursor: pointer;
-      border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
-      transition: all 0.2s;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+      font-size: var(--text-sm);
+      transition: all var(--transition-base);
+    }
+    
+    .tabs button:hover {
+      color: var(--text);
     }
     
     .tabs button.active {
+      background: var(--panel);
       color: var(--brand);
-      border-bottom-color: var(--brand);
+      box-shadow: var(--shadow-sm);
     }
     
     .history-item {
@@ -3975,7 +4574,6 @@ if (isset($_GET['background'])) {
   
   
   <script>
-    console.log('Script loaded');
     let currentUser = null;
     let currentView = 'leads';
     let currentLeadTab = localStorage.getItem('crm_lead_tab') || 'global';
@@ -4006,41 +4604,31 @@ if (isset($_GET['background'])) {
     }
     
     async function checkSession() {
-      console.log('checkSession starting');
       try {
         const data = await api('session');
-        console.log('session response:', data);
         currentUser = data.user;
         if (currentUser) {
-          console.log('rendering app');
           renderApp();
         } else {
-          console.log('rendering login');
           renderLogin();
         }
       } catch (e) {
-        console.log('checkSession error:', e.message);
         renderLogin();
       }
     }
     
     function renderLogin() {
-      console.log('renderLogin called');
       const inviteToken = new URLSearchParams(window.location.search).get('invite_token');
       if (inviteToken) {
-        console.log('redirecting to accept invite');
         renderAcceptInvite(inviteToken);
         return;
       }
       
       const magicToken = new URLSearchParams(window.location.search).get('magic_token');
       if (magicToken) {
-        console.log('verifying magic link');
         verifyMagicLink(magicToken);
         return;
       }
-      
-      console.log('setting login HTML');
       document.getElementById('app').innerHTML = `
         <div class="login-container">
           <div class="login-box">
@@ -4076,8 +4664,6 @@ if (isset($_GET['background'])) {
           method: 'POST',
           body: JSON.stringify({ token: token, type: 'login' })
         });
-        
-        console.log('Magic link verification result:', result);
         
         if (result.ok && result.user) {
           currentUser = result.user;
@@ -4227,12 +4813,10 @@ if (isset($_GET['background'])) {
     }
     
     function renderApp() {
-      console.log('renderApp called, isAdmin:', currentUser.role === 'admin');
       const isAdmin = currentUser.role === 'admin';
       
-      console.log('About to set app innerHTML');
       document.getElementById('app').innerHTML = `
-        <button class="sidebar-toggle shifted" onclick="toggleSidebar()">✕</button>
+        <button class="sidebar-toggle shifted" onclick="toggleSidebar()" data-tooltip="Toggle sidebar menu">☰</button>
         <div class="app">
           <aside class="sidebar">
             <div class="logo-area">
@@ -4240,21 +4824,45 @@ if (isset($_GET['background'])) {
             </div>
             <div class="user-info">
               <strong>${currentUser.full_name}</strong>
-              <div style="font-size: 12px; color: var(--muted); text-transform: uppercase;">${currentUser.role}</div>
+              <small>${currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)}</small>
             </div>
             <nav class="nav">
-              <button onclick="switchView('dashboard')">📊 Dashboard</button>
-              <button onclick="switchView('contacts')">👥 Contacts</button>
-              <button onclick="switchView('calls')">📞 Calls</button>
-              <button onclick="switchView('ai-calls')">🤖 Voice AI calls</button>
-              <button onclick="switchView('calendar')">📅 Calendar</button>
-              <button onclick="switchView('projects')">📁 Projects</button>
-              <button onclick="switchView('leads')" class="active">🎯 Leads</button>
-              ${isAdmin ? '<button onclick="switchView(\'users\')">⚙️ Users</button>' : ''}
-              ${isAdmin ? '<button onclick="switchView(\'settings\')">🔧 Settings</button>' : ''}
-              <button onclick="handleLogout()" class="secondary">🚪 Logout</button>
-              <button onclick="toggleTheme()" class="theme-toggle">🌓 Theme</button>
+              <button onclick="switchView('dashboard')" data-tooltip="View key metrics and recent activity">
+                <span class="nav-icon">📊</span> Dashboard
+              </button>
+              <button onclick="switchView('contacts')" data-tooltip="Manage your contacts database">
+                <span class="nav-icon">👥</span> Contacts
+              </button>
+              <button onclick="switchView('calls')" data-tooltip="Track and log phone calls">
+                <span class="nav-icon">📞</span> Calls
+              </button>
+              <button onclick="switchView('ai-calls')" data-tooltip="Monitor AI voice agent calls">
+                <span class="nav-icon">🤖</span> Voice AI
+              </button>
+              <button onclick="switchView('calendar')" data-tooltip="View scheduled events and bookings">
+                <span class="nav-icon">📅</span> Calendar
+              </button>
+              <button onclick="switchView('projects')" data-tooltip="Manage your project pipeline">
+                <span class="nav-icon">📁</span> Projects
+              </button>
+              <button onclick="switchView('leads')" class="active" data-tooltip="Manage sales leads">
+                <span class="nav-icon">🎯</span> Leads
+              </button>
+              ${isAdmin ? `<button onclick="switchView('users')" data-tooltip="Manage user accounts">
+                <span class="nav-icon">👤</span> Users
+              </button>` : ''}
+              ${isAdmin ? `<button onclick="switchView('settings')" data-tooltip="System configuration">
+                <span class="nav-icon">⚙️</span> Settings
+              </button>` : ''}
             </nav>
+            <div style="margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: var(--space-2);">
+              <button onclick="toggleTheme()" class="btn ghost" style="justify-content: flex-start;" data-tooltip="Switch between light and dark mode">
+                🌓 Toggle Theme
+              </button>
+              <button onclick="handleLogout()" class="btn secondary" style="justify-content: center;" data-tooltip="Sign out of your account">
+                🚪 Logout
+              </button>
+            </div>
           </aside>
           <main class="content">
             <div id="view-dashboard" class="view"></div>
@@ -4325,11 +4933,8 @@ if (isset($_GET['background'])) {
         </nav>
       `;
       
-      console.log('innerHTML set, app content length:', document.getElementById('app').innerHTML.length);
       const savedView = localStorage.getItem('crm_current_view') || 'dashboard';
-      console.log('switching to view:', savedView);
       switchView(savedView);
-      console.log('renderApp complete');
     }
     
     function switchView(view) {
@@ -5900,15 +6505,34 @@ if (isset($_GET['background'])) {
     async function renderDashboard() {
       const stats = await api('stats');
       document.getElementById('view-dashboard').innerHTML = `
-        <h2 style="margin-bottom: 20px;">Dashboard</h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
-          <div class="card"><h3>Contacts</h3><div style="font-size: 24px; color: var(--brand);">${stats.contacts}</div></div>
-          <div class="card"><h3>Calls (7 days)</h3><div style="font-size: 24px; color: var(--accent);">${stats.calls7}</div></div>
-          <div class="card"><h3>Open Projects</h3><div style="font-size: 24px; color: var(--kt-yellow);">${stats.openProjects}</div></div>
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <p>Welcome back! Here's an overview of your CRM activity.</p>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        
+        <div class="stats-grid">
+          <div class="stat-card brand" data-tooltip="Total number of contacts in your database">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value">${stats.contacts}</div>
+            <div class="stat-label">Total Contacts</div>
+          </div>
+          <div class="stat-card accent" data-tooltip="Calls made in the last 7 days">
+            <div class="stat-icon">📞</div>
+            <div class="stat-value">${stats.calls7}</div>
+            <div class="stat-label">Calls (7 Days)</div>
+          </div>
+          <div class="stat-card warning" data-tooltip="Projects currently in pipeline">
+            <div class="stat-icon">📋</div>
+            <div class="stat-value">${stats.openProjects}</div>
+            <div class="stat-label">Open Projects</div>
+          </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: var(--space-5);">
           <div class="card">
-            <h3>Recent Contacts</h3>
+            <div class="card-header">
+              <h2>Recent Contacts</h2>
+            </div>
             <table>
               <thead><tr><th>Name</th><th>Company</th><th>Phone</th></tr></thead>
               <tbody>
@@ -5917,7 +6541,9 @@ if (isset($_GET['background'])) {
             </table>
           </div>
           <div class="card">
-            <h3>Recent Calls</h3>
+            <div class="card-header">
+              <h2>Recent Calls</h2>
+            </div>
             <table>
               <thead><tr><th>When</th><th>Contact</th><th>Outcome</th></tr></thead>
               <tbody>
@@ -6200,12 +6826,10 @@ if (isset($_GET['background'])) {
     async function returnContactToLead(id) {
       if (!confirm('Return this contact to leads? This will move the contact back to the leads pool.')) return;
       try {
-        console.log('Attempting to return contact to lead, ID:', id);
         const response = await api('contacts.returnToLead', {
           method: 'POST',
           body: JSON.stringify({ id })
         });
-        console.log('Return to lead response:', response);
         alert('Contact successfully returned to leads!');
         await loadContacts();
         switchView('leads');
